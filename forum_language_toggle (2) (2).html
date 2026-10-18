@@ -1,0 +1,1881 @@
+<!DOCTYPE html>
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+<title>a forum</title>
+<style>
+body{font-family:Arial;max-width:900px;margin:auto;padding:20px;background:#f4f6fb}
+input,button{
+padding:8px;
+margin:4px;
+transition:.15s;
+}
+button:hover{
+transform:translateY(-1px);
+}
+button:active{
+transform:scale(.96);
+}
+.post{
+border:1px solid #ddd;
+padding:14px;
+margin:12px 0;
+border-radius:12px;
+background:white;
+box-shadow:0 2px 8px rgba(0,0,0,.08);
+opacity:0;
+transform:translateY(15px);
+animation:postAppear .35s ease forwards;
+transition:transform .2s, box-shadow .2s;
+}
+
+@keyframes postAppear{
+from{opacity:0;transform:translateY(15px);}
+to{opacity:1;transform:translateY(0);}
+}
+.post:hover{transform:translateY(-4px);box-shadow:0 10px 25px rgba(0,0,0,.12)}
+.post-moderation{margin-top:6px}
+.meta{font-size:12px;color:#666}
+.actionBtn{margin-right:6px}
+
+.popup{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000}
+.popup-content{
+background:#fff;
+max-width:600px;
+width:90%;
+padding:20px;
+border-radius:10px;
+position:absolute;
+top:50%;
+left:50%;
+transform:translate(-50%,-50%);
+opacity:0;
+animation:popupIn .2s ease forwards;
+}
+
+@keyframes popupIn{
+from{opacity:0;transform:translate(-50%,-55%) scale(.96);}
+to{opacity:1;transform:translate(-50%,-50%) scale(1);}
+}
+
+</style>
+
+<style>
+.avatar{width:48px;height:48px;border-radius:50%;object-fit:cover;margin-right:12px}
+.profile-header{display:flex;align-items:center;margin-bottom:8px}
+.profile-bio{white-space:pre-wrap;font-size:14px;color:#333}
+.profile-actions{margin-top:10px}
+.profile-header .avatar{width:80px;height:80px}
+</style>
+
+<style>
+.badge{display:inline-block;background:#ffd700;color:#000;border-radius:8px;padding:2px 6px;font-size:11px;margin-left:6px}
+.replies{margin-top:10px;margin-left:56px}
+.reply{border-left:2px solid #eee;padding:8px 12px;margin:8px 0;background:#fbfbfd;border-radius:8px}
+.reply .avatar{width:32px;height:32px}
+.reply-input{display:flex;margin-top:8px}
+.reply-input input{flex:1}
+
+.dm-panel{display:none;position:fixed;inset:20px;z-index:1001;background:#fff;border-radius:16px;box-shadow:0 18px 55px rgba(0,0,0,.25);overflow:hidden;border:1px solid #dfe5f0}
+.dm-header{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid #e7ebf3;background:#f8faff}
+.dm-layout{display:flex;height:calc(100% - 62px)}
+.dm-sidebar{width:280px;border-right:1px solid #e7ebf3;background:#f9fbff;padding:12px;overflow:auto}
+.dm-thread{flex:1;display:flex;flex-direction:column;background:#fff}
+.dm-thread-header{padding:14px 16px;border-bottom:1px solid #e7ebf3;font-weight:bold}
+.dm-messages{flex:1;overflow:auto;padding:14px;background:#f5f7fc}
+.dm-message{display:flex;justify-content:flex-start;margin-bottom:10px}
+.dm-message.me{justify-content:flex-end}
+.dm-bubble{max-width:75%;padding:10px 12px;border-radius:12px;background:#fff;border:1px solid #e5eaf3;word-break:break-word}
+.dm-message.me .dm-bubble{background:#dfeeff;border-color:#cfe3ff}
+.dm-bubble .dm-moderation{margin-top:6px;font-size:12px;color:#777}
+.dm-composer{display:none;align-items:center;gap:8px;padding:12px;border-top:1px solid #e7ebf3;background:#fff}
+.dm-composer input{flex:1}
+.dm-thread-item{display:block;width:100%;text-align:left;padding:10px 12px;margin-bottom:8px;border:1px solid #e4eaf3;border-radius:10px;background:#fff;cursor:pointer}
+.dm-thread-item:hover{background:#f1f6ff}
+.dm-thread-item.active{background:#eaf3ff;border-color:#bfd9ff}
+.dm-thread-name{font-weight:bold;margin-bottom:4px}
+.empty-state{padding:12px;color:#666;font-size:14px}
+</style>
+</head>
+<body>
+
+<h1>forum</h1>
+
+<h5>WEBSITE STILL IN DEVELOPMENT, POSTS AND USER DATA MAY GET DELETED.</h5>
+
+<button onclick="openAccountMenu()">Accounts</button>
+<button id="openDmBtn" type="button">Direct Messages</button>
+<button id="languageBtn" type="button">Nederlands</button>
+
+<p id="status">logging in...</p>
+
+<div id="accountMenu" class="popup">
+  <div class="popup-content">
+    <h2>Account</h2>
+
+    <input id="email" type="email" placeholder="Email">
+    <input id="password" type="password" placeholder="Password">
+
+    <button id="signupBtn">sign up</button>
+    <button id="loginBtn">log in</button>
+    <button id="logoutBtn">log out</button>
+	<button id="resetNameButton">reset username</button>
+	<button id="devMsgBtn">developer message</button>
+	
+
+    <br><br>
+    <button onclick="closeAccountMenu()">Close</button>
+  </div>
+</div>
+
+<hr>
+
+<input id="postInput" placeholder="write something!">
+<button id="postBtn">Post</button>
+
+<div id="posts">
+  <div class="post" style="animation-delay: 0s;">
+    <div><b>loading...</b></div>
+    <div class="meta"></div>
+    <div style="margin:8px 0">loading posts, please wait...</div>
+  </div>
+</div>
+
+<hr>
+<div id="adminPanel" style="display: none; border: 2px solid rgb(136, 136, 136); padding: 10px; margin-top: 15px;">
+<h2>admin stuff :p</h2>
+<input id="searchUser" placeholder="Username">
+<button id="searchBtn">Search</button>
+  <button id="listUsersBtn">List Users</button>
+  <div id="userList" style="margin-top:10px"></div>
+<div id="adminResults"></div>
+</div>
+
+<h4>please be respectful!</h4>
+
+
+<hr>
+<button onclick="openPolicy()">Privacy Policy &amp; Terms of Use</button>
+
+<div id="policyMenu" class="popup">
+  <div class="popup-content">
+    <h2>Privacy Policy</h2>
+    <p>The information that is collected:
+usernames, s (stored in Google Firebase for login and moderation purposes), messages posted to this forum, (your password is NOT accesible to the owner of this forum.).to get your information deleted off of this forum, please contact adameschr@gmail.com with the email address associated with your account. Thank you for reading the privacy policy, have fun on this forum </p>
+    <p>LAST UPDATED: JULY 2nd 2026</p>
+	  <h2>Terms of Use</h2>
+    <p>Here's a list of the rules of this forum</p>
+    <p>any bypassing of the post filter (the thing that blocks you from posting certain words/sentences) will result in your message being deleted if found by the owner and after repeatedly bypassing the filter your account may be disabled.</p>
+    <p>inappropriate usernames will be deleted if found and you will have to pick a new username.</p>
+	<p>LAST UPDATED: JULY 2nd 2026</p>  
+    <button onclick="closePolicy()">Close</button>
+  </div>
+</div>
+
+
+ 
+<div id="profilePopup" class="popup">
+  <div class="popup-content">
+    <h2 id="profileTitle">Profile</h2>
+    <div class="profile-header">
+      <img id="profileAvatar" class="avatar" src="" alt="avatar">
+      <div>
+        <div id="profileUsername" style="font-weight:bold;font-size:18px"></div>
+        <div id="profileBadges" style="margin-top:6px"></div>
+        <div id="profileEmail" class="meta" style="font-size:12px;color:#666"></div>
+        <div id="profileJoinDate" class="meta" style="font-size:12px;color:#666;margin-top:4px"></div>
+      </div>
+    </div>
+    <div id="profileBio" class="profile-bio">No bio</div>
+
+    <div id="editProfileForm" style="display:none;margin-top:10px">
+      <textarea id="profileBioInput" placeholder="Write a short bio" style="width:100%;height:80px"></textarea>
+      <div style="margin-top:8px">
+        <input id="avatarFile" type="file" accept="image/*">
+      </div>
+      <div class="profile-actions">
+        <button id="saveProfileBtn">Save</button>
+        <button id="cancelProfileBtn">Cancel</button>
+      </div>
+    </div>
+
+    <div id="profileControls" style="margin-top:12px">
+      <button id="editProfileBtn">Edit Profile</button>
+      <button id="messageUserBtn" style="display:none">Message</button>
+      <button onclick="closeProfile()">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="dmPanel" class="dm-panel">
+  <div class="dm-header">
+    <h3 style="margin:0">Direct Messages</h3>
+    <button id="closeDmBtn" type="button">Close</button>
+  </div>
+  <div class="dm-layout">
+    <aside class="dm-sidebar">
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <input id="dmUserSearch" placeholder="Search user" style="flex:1">
+        <button id="dmSearchBtn" type="button">Search</button>
+      </div>
+      <div id="dmConversationList"></div>
+    </aside>
+    <section class="dm-thread">
+      <div id="dmThreadHeader" class="dm-thread-header">Select a conversation</div>
+      <div id="dmMessages" class="dm-messages"></div>
+      <div id="dmComposer" class="dm-composer">
+        <input id="dmInput" placeholder="Write a message...">
+        <button id="sendDmBtn" type="button">Send</button>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script type="module">
+const firebaseConfig = {
+  apiKey: "AIzaSyA6kVGxsYBUBsOQrVKsk6n29xM3yrJhcOs",
+  authDomain: "base-c4932.firebaseapp.com",
+  projectId: "base-c4932",
+  storageBucket: "base-c4932.firebasestorage.app",
+  messagingSenderId: "831332975571",
+  appId: "1:831332975571:web:c50e59bc21aff4a2bde526"
+};
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
+import {
+  getFirestore, collection, addDoc, getDocs,
+  doc, getDoc, setDoc, deleteDoc, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
+
+import {
+  getAuth,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+  GoogleAuthProvider,
+  signInWithPopup
+} from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
+
+import { pipeline } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.2";
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+const provider = new GoogleAuthProvider();
+let toxicityClassifierPromise;
+
+const banReasons = {
+  severe_toxic: {
+    code: "severe_toxic",
+    message: "Severely toxic content is not allowed on this forum."
+  },
+  manual: {
+    code: "manual",
+    message: "unknown"
+  }
+};
+
+async function isToxic(text){
+  const predictions = await getModerationPredictions(text);
+  return predictions.some(prediction =>
+    prediction.label !== "non-toxic" && prediction.score >= 0.8
+  );
+}
+
+async function getModerationPredictions(text){
+  if(!toxicityClassifierPromise){
+    toxicityClassifierPromise = pipeline("text-classification", "Xenova/toxic-bert").catch(error => {
+      toxicityClassifierPromise = null;
+      throw error;
+    });
+  }
+
+  const classifier = await toxicityClassifierPromise;
+  const result = await classifier(text, { top_k: null });
+  return Array.isArray(result[0]) ? result[0] : result;
+}
+
+async function isSevereToxic(text){
+  const predictions = await getModerationPredictions(text);
+  return predictions.some(prediction =>
+    prediction.label.toLowerCase().includes("severe_toxic") && prediction.score >= 0.8
+  );
+}
+
+async function getUsername(uid){
+ const d = await getDoc(doc(db,"users",uid));
+ return d.exists() ? d.data().username : null;
+}
+
+function escapeHtml(value){
+ return String(value)
+   .replaceAll("&", "&amp;")
+   .replaceAll("<", "&lt;")
+   .replaceAll(">", "&gt;")
+   .replaceAll('"', "&quot;")
+   .replaceAll("'", "&#039;");
+}
+
+async function usernameTaken(username){
+ const snap = await getDocs(collection(db,"users"));
+ let taken = false;
+ snap.forEach(d=>{
+   const u = d.data().username;
+   if(u && u.toLowerCase()===username.toLowerCase()) taken=true;
+ });
+ return taken;
+}
+
+async function ensureUsername(user){
+ if(!user) return null; // must be logged in
+
+ const userRef = doc(db,"users",user.uid);
+ let existingDoc = await getDoc(userRef);
+ if(existingDoc.exists()){
+   const data = existingDoc.data();
+   if(data.username){
+     if(!data.createdAt){
+       await setDoc(userRef, { createdAt: serverTimestamp() }, { merge: true });
+     }
+     return data.username;
+   }
+ }
+
+ let username = prompt("Choose a unique username");
+
+ if(!username) return null;
+
+ username = username.trim();
+
+ if(!/^[a-zA-Z0-9_]{1,20}$/.test(username)){
+   alert("1-20 characters. letters, numbers and underscores (_) only.");
+   return ensureUsername(user);
+ }
+
+ if(await usernameTaken(username)){
+   alert("Username already taken.");
+   return ensureUsername(user);
+ }
+
+ const update = {
+   username,
+   email:user.email,
+   uid:user.uid,
+   backupname:username
+ };
+
+ if(!existingDoc.exists() || !existingDoc.data().createdAt){
+   update.createdAt = serverTimestamp();
+ }
+
+ await setDoc(userRef, update, { merge: true });
+ return username;
+}
+
+async function loadPosts(){
+ const container = document.getElementById("posts");
+ container.innerHTML = "";
+ // If the current viewer is banned, stop and show banned message
+ if(auth.currentUser){
+   try{
+     const meDoc = await getDoc(doc(db,'users', auth.currentUser.uid));
+     if(meDoc.exists() && meDoc.data().banned && (await getUsername(auth.currentUser.uid)) !== 'skbidi676767676767676676767'){
+       const banReason = meDoc.data().banReason || 'banned by moderator';
+       container.innerHTML = `
+         <div class="post" style="animation-delay:0s;">
+           <div><b>banned.</b></div>
+           <div style="margin:8px 0">${escapeHtml(banReason)}</div>
+         </div>`;
+       document.getElementById('postBtn').disabled = true;
+       updateLanguage();
+       return;
+     }
+   }catch(e){console.error(e)}
+ }
+ // viewer username (allow admin to still see banned users' posts)
+ const viewerUsername = auth.currentUser ? await getUsername(auth.currentUser.uid) : null;
+
+ const snap = await getDocs(collection(db,"posts"));
+
+ // load all replies once and group by postId
+ const repliesSnap = await getDocs(collection(db,'replies'));
+ const repliesByPost = {};
+ repliesSnap.forEach(r => {
+   const rd = r.data();
+   const pid = rd.postId;
+   if(!repliesByPost[pid]) repliesByPost[pid]=[];
+   repliesByPost[pid].push(rd);
+ });
+
+ const postPromises = snap.docs.map(async (postDoc) => {
+   const data = postDoc.data();
+   const div = document.createElement("div");
+   div.className = "post";
+   div.style.animationDelay = `${container.children.length * 0.05}s`;
+
+   let avatarUrl = 'https://www.gravatar.com/avatar/?d=mp&s=80';
+   let displayName = data.user || 'unknown user';
+   let badgesHtml = '';
+   try{
+     const prof = await getDoc(doc(db,'users', data.uid || ''));
+     if(prof.exists()){
+       const pd = prof.data();
+       if(pd.banned && viewerUsername !== 'adam'){
+         return;
+       }
+       avatarUrl = pd.avatar || avatarUrl;
+       displayName = pd.username || displayName;
+       const badges = pd.badges || [];
+       badgesHtml = badges.map(b=>`<span class="badge">${b}</span>`).join('');
+     }
+   }catch(e){console.error('profile load failed', e);} 
+
+   const postReplies = repliesByPost[postDoc.id] || [];
+   const moderationLabel = data.toxic === true
+     ? '<div class="meta post-moderation">⚠︎ This message may violate the Terms of Use.</div>'
+     : '';
+   let repliesHtml = '<div class="replies">';
+   for(const r of postReplies){
+     repliesHtml += `
+       <div class="reply">
+         <div style="display:flex;align-items:center">
+           <img src="${r.avatar || 'https://www.gravatar.com/avatar/?d=mp&s=48'}" class="avatar" alt="avatar">
+           <div style="margin-left:8px"><b>${r.user || 'unknown'}</b> <span class="meta">${r.createdAt? timeAgo(r.createdAt): ''}</span></div>
+         </div>
+         <div style="margin-top:6px">${r.text || ''}</div>
+       </div>`;
+   }
+   repliesHtml += `
+     <div class="reply-input" id="replyBox-${postDoc.id}" style="display:none">
+       <input id="replyInput-${postDoc.id}" placeholder="Write a reply...">
+       <button onclick="submitReply('${postDoc.id}')">Reply</button>
+     </div>
+   </div>`;
+
+   div.innerHTML = `
+  <div style="display:flex;align-items:center">
+    <img src="${avatarUrl}" class="avatar" alt="avatar">
+    <div style="margin-left:8px"><b><a href="#" onclick="openProfile('${data.uid || ''}');return false;">${displayName}</a></b>${badgesHtml}</div>
+  </div>
+  <div class="meta">${timeAgo(data.createdAt || "timestamp not available")}</div>
+  <div style="margin:8px 0">${data.text || "text not available"}</div>
+  ${moderationLabel}
+  <div><button onclick="openReplyBox('${postDoc.id}')">Reply</button></div>
+  ${repliesHtml}
+   `;
+
+   const currentUsername = auth.currentUser
+      ? await getUsername(auth.currentUser.uid)
+      : null;
+
+   if (currentUsername === "adam") {
+      const deleteBtn = document.createElement("button");
+      deleteBtn.textContent = "Delete";
+
+      deleteBtn.onclick = async () => {
+         await deleteDoc(doc(db, "posts", postDoc.id));
+         loadPosts();
+      };
+
+      div.appendChild(document.createElement("br"));
+      div.appendChild(deleteBtn);
+   }
+
+   container.appendChild(div);
+ });
+
+ await Promise.all(postPromises);
+ 
+ // Always retranslate after posts load to ensure consistency
+ setTimeout(() => {
+   updateLanguage();
+ }, 50);
+}
+
+resetNameButton.onclick = async () => {
+  const user = auth.currentUser;
+  const username = await getUsername(auth.currentUser.uid);
+   // ensure we also respect explicit banned flag in user doc
+   try{
+     const ud = await getDoc(doc(db,'users', auth.currentUser.uid));
+     if(ud.exists() && ud.data().banned){
+       document.getElementById("posts").innerHTML = `
+          <div class="post" style="animation-delay:0s;">
+              <div><b>something went wrong.</b></div>
+              <div style="margin:8px 0">
+                  you do not have permission to reset your username.
+              </div>
+              <div class="meta">code: banned</div>
+          </div>
+      `;
+      const statusElement = document.getElementById("status");
+      statusElement.textContent = "Logged in as " + auth.currentUser.email;
+      return;
+     }
+   }catch(e){console.error(e)}
+  
+      if (username.includes("ban")) {
+	  console.log("username reset not allowed")
+	  document.getElementById("posts").innerHTML = `
+                <div class="post" style="animation-delay:0s;">
+                    <div><b>something went wrong.</b></div>
+                    <div style="margin:8px 0">
+                        you do not have permission to reset your username
+                    </div>
+					<div class="meta">code: ${username}</div>
+                </div>
+            `;
+			return;
+			}
+  
+  await setDoc(
+    doc(db, "users", user.uid),
+    {
+      username: ""
+    },
+    { merge: true }
+  );
+  console.log("username reset.")
+    document.getElementById("posts").innerHTML = `
+        <div class="post" style="animation-delay:0s;">
+            <div><b>your username has been reset.</b></div>
+            <div style="margin:8px 0">
+               you have reset your username.
+            </div>
+			<div class="meta">please refresh the page to choose a new username.</div>
+        </div>
+    `;
+			const statusElement = document.getElementById("status");
+	statusElement.textContent = "Logged in as " + auth.currentUser.email;
+	
+	
+	  setTimeout(() => {
+    location.reload();
+}, 1500);
+console.log("refreshing")
+	
+	
+	}
+	
+
+
+function timeAgo(ts){
+ if(!ts) return "just now";
+ const s=Math.floor((Date.now()-ts)/1000);
+ if(s<60)return s+"s ago";
+ if(s<3600)return Math.floor(s/60)+"m ago";
+ if(s<86400)return Math.floor(s/3600)+"h ago";
+ return Math.floor(s/86400)+"d ago";
+}
+
+async function loadDeveloperMessage(){
+  try{
+    const snap = await getDocs(collection(db, 'devmsg'));
+    const container = document.getElementById('posts');
+    if(snap.empty){
+      container.innerHTML = `
+        <div class="post" style="animation-delay:0s;">
+          <div><b>message from the developer</b></div>
+          <div style="margin:8px 0">No developer message right now.</div>
+        </div>`;
+      return;
+    }
+
+    const messages = snap.docs
+      .map(doc => doc.data() || {})
+      .map(data => data.text || data.message || data.content)
+      .filter(Boolean);
+
+    if(messages.length === 0){
+      container.innerHTML = `
+        <div class="post" style="animation-delay:0s;">
+          <div><b>message from the developer</b></div>
+          <div style="margin:8px 0">No developer message right now.</div>
+        </div>`;
+      return;
+    }
+
+    container.innerHTML = '';
+    messages.forEach((message, index) => {
+      const div = document.createElement('div');
+      div.className = 'post';
+      div.style.animationDelay = `${index * 0.1}s`;
+      div.innerHTML = `
+        <div><b>message from the developer</b></div>
+        <div style="margin:8px 0">${message}</div>`;
+      container.appendChild(div);
+    });
+  }catch(e){
+    console.error('could not load developer message', e);
+    document.getElementById('posts').innerHTML = `
+      <div class="post" style="animation-delay:0s;">
+        <div><b>message from the developer</b></div>
+        <div style="margin:8px 0">Could not load the developer message.</div>
+      </div>`;
+  }
+}
+
+function formatJoinDate(value){
+ if(!value) return 'unavailable';
+ if(typeof value === 'string'){
+   const parsed = new Date(value);
+   return isNaN(parsed.getTime()) ? 'unavailable' : parsed.toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'});
+ }
+ if(value.toDate){
+   return value.toDate().toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'});
+ }
+ if(value instanceof Date){
+   return value.toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'});
+ }
+ return 'unavailable';
+}
+
+signupBtn.onclick = async ()=>{
+ try{
+  await createUserWithEmailAndPassword(auth,email.value,password.value);
+ }catch(e){console.log(e.message);}
+ document.getElementById("posts").innerHTML = `
+                <div class="post" style="animation-delay:0s;">
+                    <div><b>log in or try a different email.</b></div>
+                    <div style="margin:8px 0">
+                        email already in use.
+                    </div>
+                </div>
+            `;
+};
+
+loginBtn.onclick = async ()=>{
+ try{
+  await signInWithEmailAndPassword(auth,email.value,password.value);
+ }catch(e){alert(e.message);}
+};
+
+logoutBtn.onclick = async () => {
+    try {
+        await signOut(auth);
+		document.getElementById("posts").innerHTML = `
+                <div class="post" style="animation-delay:0s;">
+                    <div><b>logged out.</b></div>
+                    <div style="margin:8px 0">
+                        you have logged out.
+                    </div>
+                </div>
+            `;
+    } catch (e) {
+        alert(e.message);
+    }
+};
+
+document.getElementById('devMsgBtn').onclick = async function(){
+  await loadDeveloperMessage();
+  closeAccountMenu();
+};
+
+onAuthStateChanged(auth, async (user) => {
+    const statusElement = document.getElementById("status");
+
+    if (user) {
+        const username = await ensureUsername(user);
+		
+        if (username === "banned") {
+            document.getElementById("posts").innerHTML = `
+                <div class="post" style="animation-delay:0s;">
+                    <div><b>banned.</b></div>
+                    <div style="margin:8px 0">
+                        you have been permanently banned for a violation of the Terms of Use.
+                    </div>
+					<div class="meta">code: ${username}, appealable, send an email to adameschr@gmail.com</div>
+                </div>
+            `;
+
+            document.getElementById("postBtn").disabled = true;
+            statusElement.textContent = "Logged in as " + user.email;
+            return;
+        }
+		
+		        if (username === "uaban") {
+            document.getElementById("posts").innerHTML = `
+                <div class="post" style="animation-delay:0s;">
+                    <div><b>banned.</b></div>
+                    <div style="margin:8px 0">
+                        you have been permanently banned.
+                    </div>
+					<div class="meta">code: ${username}, unappealable.</div>
+                </div>
+            `;
+			
+
+            document.getElementById("postBtn").disabled = true;
+            statusElement.textContent = "Logged in as " + user.email;
+            return;
+        }
+
+        if (username === "chatfilterban") {
+            document.getElementById("posts").innerHTML = `
+                <div class="post" style="animation-delay:0s;">
+                    <div><b>banned.</b></div>
+                    <div style="margin:8px 0">
+                        you have been permanently banned for bypassing the chat filter multiple times after warnings.
+                    </div>
+					<div class="meta">code: ${username}, unappealable.</div>
+                </div>
+            `;
+
+            document.getElementById("postBtn").disabled = true;
+            statusElement.textContent = "Logged in as " + user.email;
+            return;
+        }
+		
+		        if (username === "banned") {
+            document.getElementById("posts").innerHTML = `
+                <div class="post" style="animation-delay:0s;">
+                    <div><b>posts not available.</b></div>
+                    <div style="margin:8px 0">
+                        you have been permanently banned for a violation of the Terms of Use.
+                    </div>
+                </div>
+            `;
+
+            document.getElementById("postBtn").disabled = true;
+            statusElement.textContent = "Logged in as " + user.email;
+            return;
+        }
+
+        if (username === "appealdenied") {
+            document.getElementById("posts").innerHTML = `				
+			     <div class="post" style="animation-delay:0.2s;">
+                    <div><b>banned.</b></div>
+					<div style="margin:8px 0">
+                        you have been permanently banned for a violation of the Terms of Use.
+                    </div>
+					<div><b>update:</b></div>
+                    <div style="margin:8px 0">
+                        your appeal has been denied.
+                    </div>
+					<div class="meta">code: ${username}, unappealable.</div>
+                </div>
+            `;
+
+            document.getElementById("postBtn").disabled = true;
+            statusElement.textContent = "Logged in as " + user.email;
+            return;
+        }
+		
+		if (username === "hatespeechban") {
+    document.getElementById("posts").innerHTML = `
+        <div class="post" style="animation-delay:0s;">
+            <div><b>banned.</b></div>
+            <div style="margin:8px 0">
+                you have been permanently banned for hate speech.
+            </div>
+        </div>
+    `;
+
+    document.getElementById("postBtn").disabled = true;
+    statusElement.textContent = "Logged in as " + user.email;
+    return;
+}
+
+    if (username === "modban") {
+    document.getElementById("posts").innerHTML = `
+        <div class="post" style="animation-delay:0s;">
+            <div><b>banned.</b></div>
+            <div style="margin:8px 0">
+                you have been permanently banned for bypassing client-side restrictions.
+            </div>
+			<div class="meta">code: ${username}, unappealable.</div>
+        </div>
+    `;
+
+    document.getElementById("postBtn").disabled = true;
+    statusElement.textContent = "Logged in as " + user.email;
+    return;
+}
+
+    if (username === "sban") {
+    document.getElementById("posts").innerHTML = `
+        <div class="post" style="animation-delay:0s;">
+            <div><b>banned.</b></div>
+            <div style="margin:8px 0">
+                you have been permanently banned for a violation of the Terms of Use.
+            </div>
+        </div>
+    `;
+
+    document.getElementById("postBtn").disabled = true;
+    statusElement.textContent = "Logged in as " + user.email;
+    return;
+}
+
+    if (username === "uban") {
+    document.getElementById("posts").innerHTML = `
+        <div class="post" style="animation-delay:0s;">
+            <div><b>banned.</b></div>
+            <div style="margin:8px 0">
+                you have been permanently banned for an unknown reason.
+            </div>
+			<div class="meta">code: ${username}, unappealable.</div>
+        </div>
+    `;
+
+    document.getElementById("postBtn").disabled = true;
+    statusElement.textContent = "Logged in as " + user.email;
+    return;
+}
+
+    if (username === "usernameban") {
+    document.getElementById("posts").innerHTML = `
+        <div class="post" style="animation-delay:0s;">
+            <div><b>banned.</b></div>
+            <div style="margin:8px 0">
+                you have been permanently banned for having an inappropriate username.
+            </div>
+			<div class="meta">code: ${username}, unappealable.</div>
+        </div>
+    `;
+
+    document.getElementById("postBtn").disabled = true;
+    statusElement.textContent = "Logged in as " + user.email;
+    return;
+}
+
+    if (username === "skibidi aura") {
+    document.getElementById("posts").innerHTML = `
+        <div class="post" style="animation-delay:0s;">
+            <div><b>is this aura chat?</b></div>
+            <div style="margin:8px 0">
+                your username has been changed to "skibidi aura", you now have infinite aura.
+            </div>
+        </div>
+    `;
+
+    statusElement.textContent = "Logged in as " + username;
+    return;
+}
+
+        statusElement.textContent =
+            "Logged in as " + (username || user.email);
+			
+	 			if (username === "adam") {
+console.log("wsg login text")
+	const statusElement = document.getElementById("status");
+	statusElement.textContent = "wsg, " + username;
+}		
+
+        document.getElementById("adminPanel").style.display =
+            (username === "adam") ? "block" : "none";
+
+        loadPosts();
+    } else {
+        statusElement.textContent =
+            "Not logged in.";
+        document.getElementById("adminPanel").style.display = "none";
+    }
+});
+
+// check banned status on auth change as well
+onAuthStateChanged(auth, async (user2) => {
+  if(!user2) return;
+  try{
+    const ud = await getDoc(doc(db,'users', user2.uid));
+    if(ud.exists() && ud.data().banned){
+      const banReason = ud.data().banReason || 'you have been banned by a moderator.';
+      document.getElementById('posts').innerHTML = `
+        <div class="post" style="animation-delay:0s;">
+          <div><b>banned.</b></div>
+          <div style="margin:8px 0">${escapeHtml(banReason)}</div>
+        </div>`;
+      document.getElementById('postBtn').disabled = true;
+      const statusElement = document.getElementById('status');
+      statusElement.textContent = 'Logged in as ' + user2.email;
+    }
+  }catch(e){console.error(e)}
+});
+
+if (!auth.currentUser) {
+    setTimeout(() => {
+        document.getElementById("posts").innerHTML = `
+            <div class="post">
+                <b>not logged in.</b>
+                <div>you're not logged in, please log in to post and view messages.</div>
+            </div>
+        `;
+    }, 500);
+}
+
+postBtn.onclick = async ()=>{
+ if(!auth.currentUser){
+        document.getElementById("posts").innerHTML = `
+  <div class="post">
+    <b>not logged in.</b>
+    <div>please log in first.</div>
+  </div>
+`;
+   return;
+
+ }
+
+ const username = await getUsername(auth.currentUser.uid);
+ 
+
+if (!username) {
+  document.getElementById("posts").innerHTML = `
+    <div class="post">
+      <b>something went wrong.</b>
+      <div style="margin-top: 5px;">please refresh the page.</div>
+      <div class="meta" style="margin-top: 5px;">USERNAME NOT FOUND</div>
+    </div>
+  `;
+  return;
+}
+
+    if (username.includes("ban")) {
+    document.getElementById("posts").innerHTML = `
+        <div class="post" style="animation-delay:0s;">
+            <div><b>something went wrong.</b></div>
+            <div style="margin:8px 0">
+                you do not have permission to post.
+            </div>
+			<div class="meta">code: ${username}</div>
+        </div>
+    `;
+	const statusElement = document.getElementById("status");
+	statusElement.textContent = "Logged in as " + auth.currentUser.email;
+	return;
+	}
+	
+	if (username) {
+	console.log("login text updated")
+	const statusElement = document.getElementById("status");
+	statusElement.textContent = "Logged in as " + username;
+	}
+	
+	if (username === "adam") {
+console.log("wsg adam as login text for meeeee")
+	const statusElement = document.getElementById("status");
+	statusElement.textContent = "wsg, " + username;
+}
+	
+
+
+ const text = postInput.value.trim();
+ if(!text) return;
+
+ // i care <3
+ 
+ if (text.includes("this is for later")) {
+    document.getElementById("posts").innerHTML = `
+    <div class="post">
+      <b>Are you okay, ${username}?</b>
+    </div>
+  `;
+  scheduleLanguageUpdate();
+  return;  
+}
+
+ if (text.includes("tuffknuckles")) {
+    document.getElementById("posts").innerHTML = `
+    <div class="post">
+      <b>so tuff frfr</b>
+    </div>
+  `;
+  scheduleLanguageUpdate();
+  return;  
+}
+
+ if (text.includes("jumbo is beter dan appie")) {
+    document.getElementById("posts").innerHTML = `
+    <div class="post">
+      <b>ai weet je zeker???</b>
+    </div>
+  `;
+  return;  
+}
+
+ if (text.includes("pineapple belongs on pizza")) {
+    document.getElementById("posts").innerHTML = `
+    <div class="post">
+      <b>nononnonononono</b>
+    </div>
+  `;
+  return;  
+}
+
+const user = auth.currentUser;
+
+if (text.includes("adamisgay")) {
+  await setDoc(
+    doc(db, "users", user.uid),
+    {
+      username: "postban"
+    },
+    { merge: true }
+  );
+
+  return;
+}
+
+if (text.includes("should i touch grass adam")) {
+	const statusElement = document.getElementById("status");
+	statusElement.textContent = "yeah you should, " + username;
+
+  return;
+}
+
+if (text.trim().toLowerCase() === "i want to reset my username") {
+  await setDoc(
+    doc(db, "users", user.uid),
+    {
+      username: ""
+    },
+    { merge: true }
+  );
+  console.log("username reset.")
+    document.getElementById("posts").innerHTML = `
+        <div class="post" style="animation-delay:0s;">
+            <div><b>your username has been reset.</b></div>
+            <div style="margin:8px 0">
+               you have reset your username.
+            </div>
+			<div class="meta">please refresh the page to choose a new username.</div>
+        </div>
+    `;
+			const statusElement = document.getElementById("status");
+	statusElement.textContent = "Logged in as " + auth.currentUser.email;
+  
+  
+  setTimeout(() => {
+    location.reload();
+}, 1500);
+console.log("refreshing")
+  
+  
+  return;
+  
+  }
+	
+
+const bannedUsernames = [
+  "test",
+  "nig",
+  "fucking",
+  "owner",
+  "unknown_user",
+  "reset"
+];
+
+if (bannedUsernames.some(word => username.toLowerCase().includes(word))) {
+  await setDoc(
+    doc(db, "users", user.uid),
+    {
+      username: ""
+    },
+    { merge: true }
+  );
+
+  console.log("username reset due to banned username");
+  document.getElementById("posts").innerHTML = `
+        <div class="post" style="animation-delay:0s;">
+            <div><b>your username has been reset.</b></div>
+            <div style="margin:8px 0">
+               your username was reset by a moderator or automatically.
+            </div>
+			<div class="meta">please refresh the page to choose a new username.</div>
+        </div>
+    `;
+		const statusElement = document.getElementById("status");
+	statusElement.textContent = "Logged in as " + auth.currentUser.email;
+  return;
+}
+
+
+
+ const bannedPhrases = [
+    "u suck",
+    "efn",
+    "efnn",
+    "ur buns",
+	"adam is gay",
+	"appiekaasbroodje is gay",
+	"undefined",
+	"text not available",
+	"ur so dumb",
+	"you're so dumb",
+	"kys",
+	"fuck you",
+	"fatherless",
+	"dad went to get milk",
+	"fatherless",
+	"google.com/maps",
+	"maps.google.com",
+	"goo.gl/maps/",
+	"maps.app.goo.gl/",
+];
+
+const lowerText = text.toLowerCase();
+
+for (const phrase of bannedPhrases) {
+    if (lowerText.includes(phrase.toLowerCase())) {
+        document.getElementById("posts").innerHTML = `
+  <div class="post" style="animation-delay:0s;">
+    <div><b>message not posted</b></div>
+    <div style="margin:8px 0">"${text}" is not allowed to be posted on this forum.</div>
+  </div>
+`;
+scheduleLanguageUpdate();
+setTimeout(() => {
+}, 5000);
+        return;
+    }
+}
+
+ try {
+   if(bannedUsernames.some(word => username.toLowerCase().includes(word))){
+     throw new Error("your username is not allowed on this forum");
+   }
+
+   if(await isSevereToxic(text)){
+     const banReason = banReasons.severe_toxic;
+     await setDoc(doc(db, "users", user.uid), {
+       banned: true,
+       banCode: banReason.code
+     }, { merge: true });
+
+     document.getElementById("posts").innerHTML = `
+       <div class="post">
+         <b>you have been banned.</b>
+         <div style="margin:8px 0">${banReason.message}</div>
+       </div>
+     `;
+     document.getElementById("postBtn").disabled = true;
+     return;
+   }
+
+   const toxic = await isToxic(text);
+
+   const profile = await getDoc(doc(db, "users", user.uid));
+   const profileData = profile.exists() ? profile.data() : {};
+   await addDoc(collection(db, "posts"), {
+     text,
+     user: profileData.username || auth.currentUser.email || "Unknown user",
+     email: auth.currentUser.email || null,
+     uid: user.uid,
+     createdAt: Date.now(),
+     moderationStatus: "approved",
+    toxic,
+     ...(profileData.avatar ? { avatar: profileData.avatar } : {})
+   });
+ } catch (error) {
+   document.getElementById("posts").innerHTML = `
+     <div class="post">
+       <b>message not posted</b>
+       <div style="margin:8px 0">${error.message || "mod unavailable"}</div>
+     </div>
+   `;
+   return;
+ }
+
+
+postInput.value = "";
+
+console.log("previewing message")
+console.log("posting")
+  // include avatar from profile in preview
+  let previewAvatar = 'https://www.gravatar.com/avatar/?d=mp&s=80';
+  try{
+    const prof = await getDoc(doc(db,'users', auth.currentUser.uid));
+    if(prof.exists()) previewAvatar = prof.data().avatar || previewAvatar;
+  }catch(e){console.error(e)}
+
+document.getElementById("posts").innerHTML = `
+  <div class="post" style="animation-delay:0s;">
+    <div style="display:flex;align-items:center">
+      <img src="${previewAvatar}" class="avatar" alt="avatar">
+      <div style="margin-left:8px"><b>${username}</b></div>
+    </div>
+    <div style="margin:8px 0">${text}</div>
+    <div class="meta">[message preview] posting in progress...</div>
+  </div>
+`;
+
+
+setTimeout(() => {
+    loadPosts();
+    console.log("loading posts")
+}, 1000);
+
+};
+
+
+
+
+document.getElementById("searchBtn").onclick = async () => {
+ const username=document.getElementById("searchUser").value.trim();
+ const results=document.getElementById("adminResults");
+ results.innerHTML="";
+ if(!username) return;
+
+ const snap=await getDocs(collection(db,"posts"));
+
+ snap.forEach(post=>{
+   const data=post.data();
+   if(data.user!==username) return;
+
+   const div=document.createElement("div");
+   div.className="post";
+   div.innerHTML=`<b>${data.user}</b><br>${data.uid}<br>${data.text}`;
+
+   const btn=document.createElement("button");
+   btn.textContent="Delete";
+   btn.onclick=async()=>{
+      await deleteDoc(doc(db,"posts",post.id));
+      div.remove();
+	  loadPosts(); 
+   };
+
+   div.appendChild(document.createElement("br"));
+   div.appendChild(btn);
+   results.appendChild(div);
+ });
+
+ if(results.innerHTML===""){
+    results.textContent="No posts found.";
+ }
+};
+
+document.getElementById('listUsersBtn').onclick = async function(){
+  const container = document.getElementById('userList');
+  container.innerHTML = 'Loading users...';
+  try{
+    const snap = await getDocs(collection(db,'users'));
+    container.innerHTML='';
+    snap.forEach(u=>{
+      const d = u.data();
+      const div = document.createElement('div');
+      div.className='post';
+      div.innerHTML = `<b>${d.username || '(no username)'}</b> <span class="meta">${d.email||''}</span> <div style="margin-top:6px">${d.badges? d.badges.map(b=>`<span class='badge'>${b}</span>`).join(' ') : ''}</div>${d.banned && d.banReason ? `<div class="meta" style="margin-top:6px">Ban reason: ${d.banReason}</div>` : ''}`;
+      const banBtn = document.createElement('button');
+      banBtn.textContent = d.banned ? 'Unban' : 'Ban';
+      banBtn.onclick = async ()=>{
+        if(d.banned){
+          // unban
+          await setDoc(doc(db,'users',u.id),{banned:false,banCode:null,banReason:null},{merge:true});
+        } else {
+          // ban
+          const reason = prompt(`Enter a ban reason for ${d.username || 'this user'}:`);
+          if(reason === null) return;
+          await setDoc(doc(db,'users',u.id),{
+            banned:true,
+            banCode:'manual',
+            banReason: reason.trim() || 'unknown'
+          },{merge:true});
+        }
+        // refresh list
+        document.getElementById('listUsersBtn').click();
+      };
+      div.appendChild(document.createElement('br'));
+      div.appendChild(banBtn);
+      container.appendChild(div);
+    });
+  }catch(e){console.error(e);container.textContent='Could not load users.'}
+};
+
+async function banUserById(uid){
+  await setDoc(doc(db,'users',uid),{banned:true,banCode:'manual'},{merge:true});
+}
+
+async function unbanUserById(uid){
+  await setDoc(doc(db,'users',uid),{banned:false,banCode:null},{merge:true});
+}
+
+window.openAccountMenu = function(){
+  const menu = document.getElementById('accountMenu');
+  if(menu) menu.style.display = 'block';
+};
+
+window.closeAccountMenu = function(){
+  const menu = document.getElementById('accountMenu');
+  if(menu) menu.style.display = 'none';
+};
+
+window.openPolicy = function(){
+  const menu = document.getElementById('policyMenu');
+  if(menu) menu.style.display = 'block';
+};
+
+window.closePolicy = function(){
+  const menu = document.getElementById('policyMenu');
+  if(menu) menu.style.display = 'none';
+};
+
+const dmMessagesCollection = collection(db, "directMessages");
+let activeDmUserId = null;
+
+function getConversationId(uidA, uidB){
+  return [uidA, uidB].sort().join("__");
+}
+
+async function getDisplayName(uid){
+  if(!uid) return 'Unknown user';
+  try{
+    const userDoc = await getDoc(doc(db, 'users', uid));
+    if(userDoc.exists() && userDoc.data().username){
+      return userDoc.data().username;
+    }
+  }catch(e){
+    console.error('Could not load user display name', e);
+  }
+  return 'Unknown user';
+}
+
+async function loadDirectMessages(){
+  const listEl = document.getElementById('dmConversationList');
+  if(!listEl) return;
+
+  if(!auth.currentUser){
+    listEl.innerHTML = '<div class="empty-state">Log in to start messaging.</div>';
+    return;
+  }
+
+  try{
+    const snap = await getDocs(dmMessagesCollection);
+    const threads = new Map();
+
+    snap.forEach((messageDoc) => {
+      const data = messageDoc.data();
+      const isRelated = data.senderUid === auth.currentUser.uid || data.recipientUid === auth.currentUser.uid;
+      if(!isRelated) return;
+
+      const partnerUid = data.senderUid === auth.currentUser.uid ? data.recipientUid : data.senderUid;
+      if(!partnerUid) return;
+
+      const current = threads.get(partnerUid) || { lastAt: 0, lastText: '' };
+      const ts = Number(data.createdAt || 0);
+      if(ts > current.lastAt){
+        current.lastAt = ts;
+        current.lastText = data.text || 'Sent a message';
+      }
+      threads.set(partnerUid, current);
+    });
+
+    if(threads.size === 0){
+      listEl.innerHTML = '<div class="empty-state">No direct messages yet.</div>';
+      return;
+    }
+
+    listEl.innerHTML = '';
+    const entries = [...threads.entries()].sort((a, b) => b[1].lastAt - a[1].lastAt);
+
+    for(const [partnerUid, thread] of entries){
+      const partnerName = await getDisplayName(partnerUid);
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'dm-thread-item' + (activeDmUserId === partnerUid ? ' active' : '');
+      item.innerHTML = `<div class="dm-thread-name">${partnerName}</div><div class="meta">${thread.lastText}</div>`;
+      item.onclick = () => openDirectMessageThread(partnerUid);
+      listEl.appendChild(item);
+    }
+  }catch(e){
+    console.error('Could not load direct messages', e);
+    listEl.innerHTML = '<div class="empty-state">Could not load messages.</div>';
+  }
+}
+
+async function openDirectMessageThread(partnerUid){
+  if(!auth.currentUser || !partnerUid) return;
+
+  activeDmUserId = partnerUid;
+  const threadHeader = document.getElementById('dmThreadHeader');
+  const messagesEl = document.getElementById('dmMessages');
+  const composerEl = document.getElementById('dmComposer');
+
+  const partnerName = await getDisplayName(partnerUid);
+  threadHeader.textContent = `Chat with ${partnerName}`;
+  composerEl.style.display = 'flex';
+
+  const snap = await getDocs(dmMessagesCollection);
+  const messages = [];
+  const convoId = getConversationId(auth.currentUser.uid, partnerUid);
+
+  snap.forEach((messageDoc) => {
+    const data = messageDoc.data();
+    const matches = data.conversationId === convoId
+      || (data.senderUid === auth.currentUser.uid && data.recipientUid === partnerUid)
+      || (data.senderUid === partnerUid && data.recipientUid === auth.currentUser.uid);
+
+    if(!matches) return;
+    messages.push({ ...data, id: messageDoc.id });
+  });
+
+  messages.sort((a, b) => Number(a.createdAt || 0) - Number(b.createdAt || 0));
+  messagesEl.innerHTML = '';
+
+  if(messages.length === 0){
+    messagesEl.innerHTML = '<div class="empty-state">Start the conversation.</div>';
+    return;
+  }
+
+  messages.forEach((msg) => {
+    const isMine = msg.senderUid === auth.currentUser.uid;
+    const bubble = document.createElement('div');
+    bubble.className = 'dm-message' + (isMine ? ' me' : '');
+    const bubbleContent = document.createElement('div');
+    bubbleContent.className = 'dm-bubble';
+
+    const text = document.createElement('div');
+    text.textContent = msg.text || '';
+
+    const moderationLabel = document.createElement('div');
+    moderationLabel.className = 'dm-moderation';
+    moderationLabel.textContent = typeof msg.toxic === 'boolean'
+      ? (msg.toxic ? '⚠︎ This message may violate the Terms of Use.' : 'Direct Message')
+      : 'AI moderation: unavailable';
+
+    bubbleContent.appendChild(text);
+    bubbleContent.appendChild(moderationLabel);
+    bubble.appendChild(bubbleContent);
+    messagesEl.appendChild(bubble);
+  });
+
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+  await loadDirectMessages();
+}
+
+async function findUserByUsername(username){
+  const snap = await getDocs(collection(db, 'users'));
+  let foundUid = null;
+  snap.forEach((userDoc) => {
+    const data = userDoc.data();
+    if(data.username && data.username.toLowerCase() === username.toLowerCase()){
+      foundUid = userDoc.id;
+    }
+  });
+  return foundUid;
+}
+
+window.openMessages = async function(){
+  if(!auth.currentUser){
+    document.getElementById("posts").innerHTML = `
+        <div class="post" style="animation-delay:0s;">
+            <div><b>something went wrong.</b></div>
+            <div style="margin:8px 0">
+                you do not have permission to use Direct Messages.
+            </div>
+			<div class="meta">banned</div>
+        </div>
+    `;
+    return;
+  }
+
+  // Check if user is banned
+  try{
+    const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+    if(userDoc.exists() && userDoc.data().banned){
+      document.getElementById("posts").innerHTML = `
+        <div class="post" style="animation-delay:0s;">
+            <div><b>something went wrong.</b></div>
+            <div style="margin:8px 0">
+                you do not have permission to use Direct Messages.
+            </div>
+			<div class="meta">banned</div>
+        </div>
+    `;
+      return;
+    }
+  }catch(e){
+    console.error('Could not check ban status', e);
+  }
+
+  const panel = document.getElementById('dmPanel');
+  panel.style.display = 'block';
+  await loadDirectMessages();
+};
+
+window.closeMessages = function(){
+  document.getElementById('dmPanel').style.display = 'none';
+};
+
+document.getElementById('openDmBtn').onclick = () => window.openMessages();
+document.getElementById('closeDmBtn').onclick = () => window.closeMessages();
+
+document.getElementById('dmSearchBtn').onclick = async function(){
+  const value = document.getElementById('dmUserSearch').value.trim();
+  if(!value) return;
+
+  if(!auth.currentUser){
+    alert('please log in to search users');
+    return;
+  }
+
+  // Check if user is banned
+  try{
+    const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+    if(userDoc.exists() && userDoc.data().banned){
+      alert('you have been banned and cannot message users');
+      return;
+    }
+  }catch(e){
+    console.error('Could not check ban status', e);
+  }
+
+  const uid = await findUserByUsername(value);
+  if(!uid){
+    alert('User not found');
+    return;
+  }
+  if(uid === auth.currentUser.uid){
+    alert("You can't message yourself.");
+    return;
+  }
+
+  await openDirectMessageThread(uid);
+};
+
+document.getElementById('sendDmBtn').onclick = async function(){
+  const input = document.getElementById('dmInput');
+  const text = input.value.trim();
+
+  if(!text || !activeDmUserId || !auth.currentUser){
+    return;
+  }
+
+  // Check if user is banned
+  try{
+    const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+    if(userDoc.exists() && userDoc.data().banned){
+      alert('you have been banned and cannot send messages');
+      return;
+    }
+  }catch(e){
+    console.error('Could not check ban status', e);
+  }
+
+  const toxic = await isToxic(text);
+
+  await addDoc(dmMessagesCollection, {
+    conversationId: getConversationId(auth.currentUser.uid, activeDmUserId),
+    senderUid: auth.currentUser.uid,
+    recipientUid: activeDmUserId,
+    text,
+    toxic,
+    createdAt: Date.now()
+  });
+
+  input.value = '';
+  await openDirectMessageThread(activeDmUserId);
+};
+
+window.openProfile = async function(uid){
+  const popup = document.getElementById('profilePopup');
+  if(!uid){ alert('Profile not available'); return; }
+  try{
+    const d = await getDoc(doc(db,'users',uid));
+    if(!d.exists()){ alert('Profile not found'); return; }
+    const data = d.data();
+    document.getElementById('profileUsername').textContent = data.username || 'unknown user';
+    document.getElementById('profileTitle').textContent = data.username ? data.username + "'s profile" : 'profile';
+    document.getElementById('profileEmail').textContent = data.rank || 'forum user';
+    document.getElementById('profileJoinDate').textContent = `Joined ${formatJoinDate(data.createdAt || data.joinDate || data.joinedAt)}`;
+    const badges = data.badges || [];
+    document.getElementById('profileBadges').innerHTML = badges.map(b=>`<span class="badge">${b}</span>`).join('');
+    document.getElementById('profileBio').textContent = data.bio || 'No bio';
+    document.getElementById('profileAvatar').src = data.avatar || 'https://www.gravatar.com/avatar/?d=mp&s=80';
+    document.getElementById('editProfileForm').style.display = 'none';
+    document.getElementById('profileControls').style.display = 'block';
+    popup.dataset.uid = uid;
+    const currentUid = auth.currentUser ? auth.currentUser.uid : null;
+    document.getElementById('editProfileBtn').style.display = (currentUid === uid) ? 'inline-block' : 'none';
+    const messageBtn = document.getElementById('messageUserBtn');
+    messageBtn.style.display = (currentUid && currentUid !== uid) ? 'inline-block' : 'none';
+    popup.style.display = 'block';
+  }catch(e){console.error(e);alert('Could not load profile');}
+}
+
+window.closeProfile = function(){ document.getElementById('profilePopup').style.display='none'; };
+
+document.getElementById('messageUserBtn').onclick = function(){
+  const uid = document.getElementById('profilePopup').dataset.uid;
+  if(!uid){ return; }
+  if(!auth.currentUser){
+    alert('please log in to send a message');
+    return;
+  }
+  if(uid === auth.currentUser.uid){
+    alert("You can't message yourself.");
+    return;
+  }
+  window.closeProfile();
+  window.openMessages();
+  setTimeout(() => openDirectMessageThread(uid), 150);
+};
+
+document.getElementById('editProfileBtn').onclick = function(){
+  document.getElementById('editProfileForm').style.display='block';
+  document.getElementById('profileControls').style.display='none';
+  document.getElementById('profileBioInput').value = document.getElementById('profileBio').textContent === 'No bio' ? '' : document.getElementById('profileBio').textContent;
+};
+
+document.getElementById('cancelProfileBtn').onclick = function(){
+  document.getElementById('editProfileForm').style.display='none';
+  document.getElementById('profileControls').style.display='block';
+  document.getElementById('avatarFile').value = '';
+};
+
+document.getElementById('saveProfileBtn').onclick = async function(){
+  const popup = document.getElementById('profilePopup');
+  const uid = popup.dataset.uid;
+  if(!uid) return;
+  const bio = document.getElementById('profileBioInput').value.trim();
+  const fileInput = document.getElementById('avatarFile');
+  let avatarData = null;
+  if(fileInput.files && fileInput.files[0]){
+    const file = fileInput.files[0];
+    avatarData = await new Promise((res,rej)=>{
+      const fr = new FileReader();
+      fr.onload = ()=>res(fr.result);
+      fr.onerror = rej;
+      fr.readAsDataURL(file);
+    });
+  }
+  const update = { bio };
+  if(avatarData) update.avatar = avatarData;
+  await setDoc(doc(db,'users',uid), update, { merge: true});
+  document.getElementById('profileBio').textContent = bio || 'No bio';
+  if(avatarData) document.getElementById('profileAvatar').src = avatarData;
+  document.getElementById('editProfileForm').style.display='none';
+  document.getElementById('profileControls').style.display='block';
+  alert('Profile saved.');
+};
+
+window.openReplyBox = function(postId){
+  const el = document.getElementById(`replyBox-${postId}`);
+  if(!el) return;
+  el.style.display = el.style.display === 'none' ? 'flex' : 'none';
+};
+
+window.submitReply = async function(postId){
+  if(!auth.currentUser){ alert('please log in to reply'); return; }
+  const input = document.getElementById(`replyInput-${postId}`);
+  if(!input) return;
+  const text = input.value.trim();
+  if(!text) return;
+  const uid = auth.currentUser.uid;
+  const userDoc = await getDoc(doc(db,'users',uid));
+  const username = userDoc.exists() ? userDoc.data().username : auth.currentUser.email;
+  const avatar = userDoc.exists() ? userDoc.data().avatar : null;
+  const replyDoc = {
+    postId,
+    text,
+    user: username,
+    uid,
+    createdAt: Date.now()
+  };
+  if (avatar !== undefined && avatar !== null) replyDoc.avatar = avatar;
+  try {
+    if(await isToxic(text)){
+      throw new Error('reply was blocked by moderation.');
+    }
+
+    await addDoc(collection(db, 'replies'), replyDoc);
+  } catch (error) {
+    document.getElementById("posts").innerHTML = `
+      <div class="post">
+        <b>reply not saved</b>
+        <div style="margin:8px 0">${error.message || "mod unavailable"}</div>
+      </div>
+    `;
+
+  setTimeout(() => {
+  loadPosts();
+  console.log("reply not saved")
+}, 2000);
+
+    return;
+  }
+  
+  input.value='';
+  loadPosts();
+};
+
+
+/* Simple language toggle: English is the default, Dutch is optional.
+   Only visible UI strings are translated; code, IDs, Firebase data, URLs,
+   usernames and moderation/filter logic remain unchanged. */
+const dutchTranslations = {
+  "Accounts": "Account",
+  "⚠︎ This message may violate the Terms of Use.": "⚠︎ Dit bericht is mogelijk in strijd met de Gebruikersvoorwaarden.",
+  "Direct Message": "Bericht",
+  "you do not have permission to use Direct Messages.": "je hebt geen toestemming om Berichten te gebruiken.",
+  "[message preview] posting in progress...": "[preview] bericht wordt geplaatst...",
+  "Select a conversation": "Kies een gesprek",
+  "Search user": "Zoek gebruiker",
+  "Write a message...": "Schrijf een bericht...",
+  "Send": "Stuur",
+  "Message": "Stuur een Bericht",
+  "67676767676767676767676767676767": "ohh shittings",
+  "why are you": "looking through the code?",
+  "don't you dare": "make a fake version of this site",
+  "you have been banned by a moderator.": "je bent verbannen door een moderator.",
+  "message not posted": "bericht niet geplaatst",
+  "banned.": "verbannen.",
+  "Direct Messages": "Berichten",
+  "Unknown user": "Onbekende gebruiker",
+  "Account": "Account",
+  "sign up": "registreren",
+  "log in": "inloggen",
+  "log out": "uitloggen",
+  "reset username": "gebruikersnaam resetten",
+  "developer message": "bericht van ontwikkelaar",
+  "Close": "Sluiten",
+  "Post": "Plaatsen",
+  "Search": "Zoeken",
+  "List Users": "Gebruikerslijst",
+  "please be respectful!": "wees alsjeblieft respectvol!",
+  "Privacy Policy & Terms of Use": "Privacybeleid & Gebruiksvoorwaarden",
+  "Privacy Policy": "Privacybeleid",
+  "Terms of Use": "Gebruiksvoorwaarden",
+  "Edit Profile": "Profiel bewerken",
+  "Save": "Opslaan",
+  "Cancel": "Annuleren",
+  "Reply": "Reageren",
+  "Delete": "Verwijderen",
+  "Profile": "Profiel",
+  "No bio": "Geen bio",
+  "message from the developer": "bericht van de ontwikkelaar",
+  "No developer message right now.": "Er is nu geen bericht van de ontwikkelaar.",
+  "Could not load the developer message.": "Het bericht van de ontwikkelaar kon niet worden geladen.",
+  "No posts found.": "Geen posts gevonden.",
+  "Could not load users.": "Gebruikers konden niet worden geladen.",
+  "Profile not available": "Profiel niet beschikbaar",
+  "Profile not found": "Profiel niet gevonden",
+  "Could not load profile": "Profiel kon niet worden geladen",
+  "Profile saved.": "Profiel opgeslagen.",
+  "please log in to reply": "log in om te reageren",
+  "not logged in.": "niet ingelogd.",
+  "Not logged in.": "Niet ingelogd.",
+  "please log in first.": "log eerst in.",
+  "something went wrong.": "er ging iets mis.",
+  "please refresh the page.": "ververs de pagina.",
+  "you do not have permission to post.": "je hebt geen toestemming om te posten.",
+  "your username has been reset.": "je gebruikersnaam is gereset.",
+  "you have reset your username.": "je hebt je gebruikersnaam gereset.",
+  "please refresh the page to choose a new username.": "ververs de pagina om een nieuwe gebruikersnaam te kiezen.",
+  "logged out.": "uitgelogd.",
+  "you have logged out.": "je bent uitgelogd.",
+  "loading...": "laden...",
+  "loading posts, please wait...": "posts worden geladen, even geduld...",
+  "WEBSITE STILL IN DEVELOPMENT, POSTS AND USER DATA MAY GET DELETED.": "WEBSITE IS NOG IN ONTWIKKELING, POSTS EN GEBRUIKERSGEGEVENS KUNNEN WORDEN VERWIJDERD.",
+  "write something!": "schrijf iets!",
+  "Write a short bio": "Schrijf een korte bio",
+  "Write a reply...": "Schrijf een reactie..."
+};
+
+const LANGUAGE_STORAGE_KEY = 'forum_language_mode';
+let dutchMode = localStorage.getItem(LANGUAGE_STORAGE_KEY) === 'dutch';
+const originalText = new WeakMap();
+const originalAttrs = new WeakMap();
+
+// Debounced translation update
+let updateLanguageTimeout;
+function scheduleLanguageUpdate() {
+  clearTimeout(updateLanguageTimeout);
+  updateLanguageTimeout = setTimeout(() => {
+    updateLanguage();
+  }, 50);
+}
+
+const languageObserver = new MutationObserver(() => {
+  if (document.body) {
+    scheduleLanguageUpdate();
+  }
+});
+
+if (document.body) {
+  languageObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+    attributes: true,
+    attributeFilter: ['placeholder', 'title', 'aria-label']
+  });
+}
+
+function translateNode(node) {
+  if (node.nodeType === Node.TEXT_NODE) {
+    const original = originalText.has(node) ? originalText.get(node) : node.nodeValue;
+    
+    if (!originalText.has(node)) {
+      originalText.set(node, original);
+    }
+
+    const trimmed = original.trim();
+    let nextValue = original;
+    if (dutchMode && dutchTranslations[trimmed]) {
+      nextValue = original.replace(trimmed, dutchTranslations[trimmed]);
+    } else if (!dutchMode) {
+      nextValue = original;
+    }
+
+    if (node.nodeValue !== nextValue) {
+      node.nodeValue = nextValue;
+    }
+    return;
+  }
+
+  if (node.nodeType !== Node.ELEMENT_NODE) return;
+
+  ["placeholder", "title", "aria-label"].forEach(attr => {
+    if (!node.hasAttribute(attr)) return;
+    if (!originalAttrs.has(node)) originalAttrs.set(node, {});
+    const attrs = originalAttrs.get(node);
+    if (!(attr in attrs)) attrs[attr] = node.getAttribute(attr);
+    const original = attrs[attr];
+    let nextValue = original;
+
+    if (dutchMode && dutchTranslations[original]) {
+      nextValue = dutchTranslations[original];
+    } else if (!dutchMode) {
+      nextValue = original;
+    }
+
+    if (node.getAttribute(attr) !== nextValue) {
+      node.setAttribute(attr, nextValue);
+    }
+  });
+
+  node.childNodes.forEach(translateNode);
+}
+
+function updateLanguage() {
+  translateNode(document.body);
+  const btn = document.getElementById("languageBtn");
+  if (btn) btn.textContent = dutchMode ? "switch to English" : "switch to Nederlands";
+  localStorage.setItem(LANGUAGE_STORAGE_KEY, dutchMode ? 'dutch' : 'english');
+}
+
+let isLanguageChanging = false;
+
+document.getElementById("languageBtn").onclick = async () => {
+  if (isLanguageChanging) return; // Prevent rapid clicks during language switch
+  isLanguageChanging = true;
+  
+  dutchMode = !dutchMode;
+  updateLanguage();
+  
+  // Wait a moment then update again to catch any newly loaded content
+  setTimeout(() => {
+    updateLanguage();
+    isLanguageChanging = false;
+  }, 300);
+};
+
+window.applyForumLanguage = function() {
+  updateLanguage();
+};
+
+updateLanguage();
+
+</script>
+
+
+</body></html>
