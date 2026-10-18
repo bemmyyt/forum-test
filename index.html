@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<html lang="en"><head><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#f4f6fb"><meta name="description" content="A community forum for posts, replies, and direct messages."><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
 <title>a forum</title>
 <style>
@@ -95,25 +95,63 @@ to{opacity:1;transform:translate(-50%,-50%) scale(1);}
 .dm-thread-name{font-weight:bold;margin-bottom:4px}
 .empty-state{padding:12px;color:#666;font-size:14px}
 </style>
+<style>
+/* Usability polish: preserves the existing single-column forum layout. */
+:root{color-scheme:light;--ui-blue:#2265bf;--ui-line:#d9e3f1;--ui-muted:#53657c}
+body{color:#1c2b40;line-height:1.5}
+h1{letter-spacing:-.045em;margin-bottom:8px}
+.development-note{font-size:12px;letter-spacing:.015em;font-weight:600;color:#75520b;background:#fff7df;border:1px solid #efdba2;border-radius:9px;padding:11px 13px;max-width:fit-content}
+button{cursor:pointer;border:1px solid #c9d6e7;border-radius:8px;background:#fff;color:#1c3c65;font-weight:600;min-height:37px}
+button:hover{background:#eaf3ff;border-color:#94b8e7}
+button:disabled{cursor:not-allowed;opacity:.5;transform:none}
+button:focus-visible,input:focus-visible,textarea:focus-visible,[tabindex]:focus-visible{outline:3px solid #71a7ef;outline-offset:2px}
+input,textarea{font:inherit;border:1px solid #bdcce0;border-radius:8px;background:#fff;color:#17273c;min-height:38px}
+input::placeholder,textarea::placeholder{color:#687b93}
+#postInput{width:min(100%,600px);max-width:calc(100% - 110px)}
+#postBtn{background:var(--ui-blue);color:white;border-color:var(--ui-blue);padding-inline:18px}
+#postBtn:hover:not(:disabled){background:#174d96}
+#status{font-size:13px;color:var(--ui-muted);background:#eaf1fa;padding:8px 12px;border-radius:8px;width:fit-content}
+.post{border-color:var(--ui-line);box-shadow:0 2px 10px #1e47700b}
+.post:hover{transform:translateY(-2px);box-shadow:0 6px 18px #1e47701a}
+.post-hint{font-size:12px;color:var(--ui-muted);margin-left:5px}
+.popup{padding:16px;overflow-y:auto}
+.popup-content{max-height:calc(100dvh - 32px);overflow-y:auto;box-shadow:0 20px 60px #12253b3d}
+.popup-content input{max-width:100%}
+.dm-panel{inset:clamp(8px,2vw,20px)}
+.dm-composer input,.reply-input input{min-width:0}
+.dm-thread-item:focus-visible{outline:3px solid #71a7ef;outline-offset:2px}
+@media(max-width:600px){
+ body{padding:14px}
+ .popup-content{width:100%;padding:18px}
+ .dm-layout{flex-direction:column}
+ .dm-sidebar{width:100%;max-height:32%;border-right:0;border-bottom:1px solid #e7ebf3}
+ .dm-thread{min-height:0;flex:1}
+ .dm-header{padding:10px 12px}
+ .dm-composer{padding:8px}
+ .replies{margin-left:15px}
+ .post{padding:12px}
+}
+@media(prefers-reduced-motion:reduce){.post,.popup-content{animation:none;opacity:1;transform:none}button,.post{transition:none}}
+</style>
 </head>
 <body>
 
 <h1>forum</h1>
 
-<h5>WEBSITE STILL IN DEVELOPMENT, POSTS AND USER DATA MAY GET DELETED.</h5>
+<h5 class="development-note" role="note">WEBSITE STILL IN DEVELOPMENT, POSTS AND USER DATA MAY GET DELETED.</h5>
 
 <button onclick="openAccountMenu()">Accounts</button>
 <button id="openDmBtn" type="button">Direct Messages</button>
 <button id="languageBtn" type="button">Nederlands</button>
 
-<p id="status">logging in...</p>
+<p id="status" role="status" aria-live="polite">logging in...</p>
 
 <div id="accountMenu" class="popup">
-  <div class="popup-content">
+  <div class="popup-content" role="dialog" aria-modal="true">
     <h2>Account</h2>
 
-    <input id="email" type="email" placeholder="Email">
-    <input id="password" type="password" placeholder="Password">
+    <input id="email" type="email" placeholder="Email" autocomplete="email" aria-label="Email">
+    <input id="password" type="password" placeholder="Password" autocomplete="current-password" aria-label="Password">
 
     <button id="signupBtn">sign up</button>
     <button id="loginBtn">log in</button>
@@ -129,8 +167,8 @@ to{opacity:1;transform:translate(-50%,-50%) scale(1);}
 
 <hr>
 
-<input id="postInput" placeholder="write something!">
-<button id="postBtn">Post</button>
+<input id="postInput" placeholder="write something!" aria-label="Write a post" maxlength="2000" autocomplete="off">
+<button id="postBtn">Post</button><span id="postHint" class="post-hint" aria-live="polite"></span>
 
 <div id="posts">
   <div class="post" style="animation-delay: 0s;">
@@ -230,6 +268,40 @@ usernames, s (stored in Google Firebase for login and moderation purposes), mess
   </div>
 </div>
 
+<script>
+/* Small UI enhancements that do not change posting or authentication logic. */
+(() => {
+ const input=document.getElementById('postInput');
+ const hint=document.getElementById('postHint');
+ const updateHint=()=>{hint.textContent=input.value.length ? input.value.length+'/2000' : '';};
+ input.addEventListener('input',updateHint);
+ updateHint();
+ const modalIds=['accountMenu','policyMenu','profilePopup'];
+ document.addEventListener('keydown',event=>{
+   if(event.key!=='Escape')return;
+   for(const id of modalIds){
+     const modal=document.getElementById(id);
+     if(modal && getComputedStyle(modal).display!=='none'){
+       if(id==='accountMenu' && typeof window.closeAccountMenu==='function')window.closeAccountMenu();
+       else if(id==='policyMenu' && typeof window.closePolicy==='function')window.closePolicy();
+       else if(id==='profilePopup' && typeof window.closeProfile==='function')window.closeProfile();
+       return;
+     }
+   }
+   const dm=document.getElementById('dmPanel');
+   if(dm && getComputedStyle(dm).display!=='none')document.getElementById('closeDmBtn')?.click();
+ });
+ for(const id of modalIds){
+   const modal=document.getElementById(id);
+   modal?.addEventListener('click',event=>{
+     if(event.target!==modal)return;
+     if(id==='accountMenu')window.closeAccountMenu?.();
+     if(id==='policyMenu')window.closePolicy?.();
+     if(id==='profilePopup')window.closeProfile?.();
+   });
+ }
+})();
+</script>
 <script type="module">
 const firebaseConfig = {
   apiKey: "AIzaSyA6kVGxsYBUBsOQrVKsk6n29xM3yrJhcOs",
