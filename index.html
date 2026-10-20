@@ -219,7 +219,8 @@ a{color:#8cc7ff}a:hover{color:#c1e3ff}
 
     <button id="signupBtn">sign up</button>
     <button id="loginBtn">log in</button>
-    <button id="centralLoginBtn" type="button">Sign in with adamisbored Accounts ↗</button>
+    <button id="centralLoginBtn" type="button">Continue with adamisbored Accounts ↗</button>
+    <p id="centralLoginStatus" role="status" aria-live="polite" style="font-size:12px;opacity:.8;margin:8px 0"></p>
     <button id="logoutBtn">log out</button>
 	<button id="resetNameButton">reset username</button>
 	<button id="devMsgBtn">developer message</button>
@@ -786,13 +787,16 @@ signupBtn.onclick = async ()=>{
 const SSO_ACCOUNTS_ORIGIN='https://accounts.adamisbored.xyz';
 const SSO_EXCHANGE_URL='https://europe-west1-base-c4932.cloudfunctions.net/exchangeAccountToken';
 let accountPopup=null;
+const centralLoginStatus=document.getElementById('centralLoginStatus');
 document.getElementById('centralLoginBtn').onclick=()=>{
+ centralLoginStatus.textContent='Opening your Accounts login…';
  accountPopup=window.open(SSO_ACCOUNTS_ORIGIN+'/?handoff=1&origin='+encodeURIComponent(location.origin),'adamisboredAccounts','width=520,height=720');
- if(!accountPopup)alert('Please allow popups to sign in with Accounts.');
+ if(!accountPopup){centralLoginStatus.textContent='Popup blocked. Allow popups for this site and try again.';}
 };
 window.addEventListener('message',async event=>{
  if(event.origin!==SSO_ACCOUNTS_ORIGIN||event.source!==accountPopup)return;
  if(event.data?.type!=='adamisbored-firebase-handoff'||typeof event.data.idToken!=='string')return;
+ centralLoginStatus.textContent='Connecting your Firebase account to the forum…';
  try{
   const response=await fetch(SSO_EXCHANGE_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({idToken:event.data.idToken})});
   if(!response.ok)throw new Error('Account exchange failed ('+response.status+'). Check the Firebase Function deployment.');
@@ -801,8 +805,9 @@ window.addEventListener('message',async event=>{
   await signInWithCustomToken(auth,customToken);
   accountPopup?.postMessage({type:'adamisbored-handoff-received'},SSO_ACCOUNTS_ORIGIN);
   accountPopup?.close();accountPopup=null;
+  centralLoginStatus.textContent='Signed in successfully.';
   if(typeof closeAccountMenu==='function')closeAccountMenu();
- }catch(error){console.error('Central login failed',error);alert('Central login failed: '+error.message)}
+ }catch(error){console.error('Central login failed',error);centralLoginStatus.textContent='Could not complete Accounts sign-in. The Firebase exchange function must be deployed first. You can still use the forum email/password login.';}
 });
 
 loginBtn.onclick = async ()=>{
