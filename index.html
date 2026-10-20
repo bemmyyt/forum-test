@@ -802,12 +802,17 @@ window.addEventListener('message',async event=>{
   if(!response.ok)throw Error('Token exchange failed ('+response.status+')');
   const {customToken}=await response.json();
   if(!customToken)throw Error('Missing custom token');
-  await signInWithCustomToken(auth,customToken);
-  accountPopup?.postMessage({type:'adamisbored-handoff-received'},SSO_ACCOUNTS_ORIGIN);
-  accountPopup?.close();accountPopup=null;
+  const credential=await signInWithCustomToken(auth,customToken);
+  // Do not dismiss Accounts until Firebase reports the same signed-in user.
+  await auth.authStateReady();
+  if(!auth.currentUser||auth.currentUser.uid!==credential.user.uid){
+    throw Error('Forum authentication state did not persist');
+  }
   centralLoginStatus.textContent='Signed in successfully.';
+  accountPopup?.postMessage({type:'adamisbored-handoff-received'},SSO_ACCOUNTS_ORIGIN);
+  accountPopup=null;
   if(typeof closeAccountMenu==='function')closeAccountMenu();
- }catch(error){console.error('Accounts sign-in failed',error);centralLoginStatus.textContent='Accounts sign-in failed. Please try again or use the forum login.';}
+ }catch(error){console.error('Accounts sign-in failed',error);centralLoginStatus.textContent='Accounts sign-in failed: '+(error?.message||'Unknown error')+'. You can retry without closing Accounts.';}
 });
 
 loginBtn.onclick = async ()=>{
