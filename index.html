@@ -392,7 +392,9 @@ import {
   onAuthStateChanged,
   GoogleAuthProvider,
   signInWithPopup,
-  signInWithCustomToken
+  signInWithCustomToken,
+  browserLocalPersistence,
+  setPersistence
 } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
 
 import { pipeline } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.2";
@@ -802,12 +804,14 @@ window.addEventListener('message',async event=>{
   if(!response.ok)throw Error('Token exchange failed ('+response.status+')');
   const {customToken}=await response.json();
   if(!customToken)throw Error('Missing custom token');
+  await setPersistence(auth,browserLocalPersistence);
   const credential=await signInWithCustomToken(auth,customToken);
   // Do not dismiss Accounts until Firebase reports the same signed-in user.
   await auth.authStateReady();
   if(!auth.currentUser||auth.currentUser.uid!==credential.user.uid){
     throw Error('Forum authentication state did not persist');
   }
+  document.getElementById('status').textContent='Logged in as '+(credential.user.email||'your account');
   centralLoginStatus.textContent='Signed in successfully.';
   accountPopup?.postMessage({type:'adamisbored-handoff-received'},SSO_ACCOUNTS_ORIGIN);
   accountPopup=null;
@@ -846,7 +850,12 @@ onAuthStateChanged(auth, async (user) => {
     const statusElement = document.getElementById("status");
 
     if (user) {
-        const username = await ensureUsername(user);
+        // Show authenticated state immediately, before asynchronous profile loading.
+        statusElement.textContent = 'Logged in as ' + (user.email || 'your account');
+        let username;
+        try { username = await ensureUsername(user); }
+        catch(error) { console.error('Forum profile loading failed',error); statusElement.textContent='Logged in as '+(user.email||'your account')+' (profile unavailable)'; return; }
+        if(auth.currentUser?.uid!==user.uid)return;
 		
         if (username === "banned") {
             document.getElementById("posts").innerHTML = `
@@ -1063,16 +1072,8 @@ onAuthStateChanged(auth, async (user2) => {
   }catch(e){console.error(e)}
 });
 
-if (!auth.currentUser) {
-    setTimeout(() => {
-        document.getElementById("posts").innerHTML = `
-            <div class="post">
-                <b>not logged in.</b>
-                <div>you're not logged in, please log in to post and view messages.</div>
-            </div>
-        `;
-    }, 500);
-}
+// Auth restoration is asynchronous. The auth-state observer above owns login UI;
+// a startup timer must never overwrite content after a successful sign-in.
 
 postBtn.onclick = async ()=>{
  if(!auth.currentUser){
