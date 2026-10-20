@@ -455,6 +455,10 @@ async function getUsername(uid){
  return d.exists() ? d.data().username : null;
 }
 
+function safeAvatarUrl(value,fallback){
+ try{const u=new URL(String(value),location.href);return (u.protocol==='https:'||u.protocol==='http:')?escapeHtml(u.href):fallback;}catch{return fallback;}
+}
+
 function escapeHtml(value){
  return String(value)
    .replaceAll("&", "&amp;")
@@ -522,7 +526,8 @@ async function ensureUsername(user){
 
 async function loadPosts(){
  const container = document.getElementById("posts");
- container.innerHTML = "";
+ const viewerUid=auth.currentUser?.uid;
+ container.textContent="Loading posts…";
  // If the current viewer is banned, stop and show banned message
  if(auth.currentUser){
    try{
@@ -555,11 +560,12 @@ async function loadPosts(){
    repliesByPost[pid].push(rd);
  });
 
+ const currentUsername = auth.currentUser ? await getUsername(auth.currentUser.uid) : null;
  const postPromises = snap.docs.map(async (postDoc) => {
    const data = postDoc.data();
    const div = document.createElement("div");
    div.className = "post";
-   div.style.animationDelay = `${container.children.length * 0.05}s`;
+   div.style.animationDelay = `${Math.min(snap.docs.indexOf(postDoc) * 0.05, 1)}s`;
 
    let avatarUrl = 'https://www.gravatar.com/avatar/?d=mp&s=80';
    let displayName = data.user || 'unknown user';
@@ -574,7 +580,7 @@ async function loadPosts(){
        avatarUrl = pd.avatar || avatarUrl;
        displayName = pd.username || displayName;
        const badges = pd.badges || [];
-       badgesHtml = badges.map(b=>`<span class="badge">${b}</span>`).join('');
+       badgesHtml = badges.map(b=>`<span class="badge">${escapeHtml(b)}</span>`).join('');
      }
    }catch(e){console.error('profile load failed', e);} 
 
@@ -587,10 +593,10 @@ async function loadPosts(){
      repliesHtml += `
        <div class="reply">
          <div style="display:flex;align-items:center">
-           <img src="${r.avatar || 'https://www.gravatar.com/avatar/?d=mp&s=48'}" class="avatar" alt="avatar">
-           <div style="margin-left:8px"><b>${r.user || 'unknown'}</b> <span class="meta">${r.createdAt? timeAgo(r.createdAt): ''}</span></div>
+           <img src="${safeAvatarUrl(r.avatar, 'https://www.gravatar.com/avatar/?d=mp&s=48')}" class="avatar" alt="avatar">
+           <div style="margin-left:8px"><b>${escapeHtml(r.user || 'unknown')}</b> <span class="meta">${r.createdAt? timeAgo(r.createdAt): ''}</span></div>
          </div>
-         <div style="margin-top:6px">${r.text || ''}</div>
+         <div style="margin-top:6px">${escapeHtml(r.text || '')}</div>
        </div>`;
    }
    repliesHtml += `
@@ -602,19 +608,15 @@ async function loadPosts(){
 
    div.innerHTML = `
   <div style="display:flex;align-items:center">
-    <img src="${avatarUrl}" class="avatar" alt="avatar">
-    <div style="margin-left:8px"><b><a href="#" onclick="openProfile('${data.uid || ''}');return false;">${displayName}</a></b>${badgesHtml}</div>
+    <img src="${safeAvatarUrl(avatarUrl, 'https://www.gravatar.com/avatar/?d=mp&s=80')}" class="avatar" alt="avatar">
+    <div style="margin-left:8px"><b><a href="#" onclick="openProfile('${data.uid || ''}');return false;">${escapeHtml(displayName)}</a></b>${badgesHtml}</div>
   </div>
   <div class="meta">${timeAgo(data.createdAt || "timestamp not available")}</div>
-  <div style="margin:8px 0">${data.text || "text not available"}</div>
+  <div style="margin:8px 0">${escapeHtml(data.text || "text not available")}</div>
   ${moderationLabel}
   <div><button onclick="openReplyBox('${postDoc.id}')">Reply</button></div>
   ${repliesHtml}
    `;
-
-   const currentUsername = auth.currentUser
-      ? await getUsername(auth.currentUser.uid)
-      : null;
 
    if (currentUsername === "adam") {
       const deleteBtn = document.createElement("button");
@@ -629,10 +631,13 @@ async function loadPosts(){
       div.appendChild(deleteBtn);
    }
 
-   container.appendChild(div);
+   return div;
  });
 
- await Promise.all(postPromises);
+ const renderedPosts=await Promise.all(postPromises);
+ if(auth.currentUser?.uid!==viewerUid)return;
+ container.replaceChildren(...renderedPosts.filter(Boolean));
+ if(!renderedPosts.some(Boolean))container.textContent='No posts yet.';
  
  // Always retranslate after posts load to ensure consistency
  setTimeout(() => {
@@ -863,6 +868,11 @@ onAuthStateChanged(auth, async (user) => {
         try { username = await ensureUsername(user); }
         catch(error) { console.error('Forum profile loading failed',error); statusElement.textContent='Logged in as '+(user.email||'your account')+' (profile unavailable)'; return; }
         if(auth.currentUser?.uid!==user.uid)return;
+        if(!username){
+          statusElement.textContent='Logged in as '+(user.email||'your account')+' — choose a username to post';
+          document.getElementById('posts').textContent='Choose a forum username to continue. Refresh to retry username setup.';
+          return;
+        }
 		
         if (username === "banned") {
             document.getElementById("posts").innerHTML = `
