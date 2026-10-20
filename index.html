@@ -397,13 +397,15 @@ import {
   setPersistence
 } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
 
-import { pipeline } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.2";
+// Load the large moderation library only when moderation is actually needed.
+// A CDN failure must not prevent the entire forum module from starting.
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
 let toxicityClassifierPromise;
+let moderationModulePromise;
 
 const banReasons = {
   severe_toxic: {
@@ -425,8 +427,13 @@ async function isToxic(text){
 
 async function getModerationPredictions(text){
   if(!toxicityClassifierPromise){
-    toxicityClassifierPromise = pipeline("text-classification", "Xenova/toxic-bert").catch(error => {
+    toxicityClassifierPromise = (async()=>{
+      moderationModulePromise ||= import("https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.2");
+      const {pipeline} = await moderationModulePromise;
+      return pipeline("text-classification", "Xenova/toxic-bert");
+    })().catch(error => {
       toxicityClassifierPromise = null;
+      moderationModulePromise = null;
       throw error;
     });
   }
@@ -1045,10 +1052,14 @@ console.log("wsg login text")
         document.getElementById("adminPanel").style.display =
             (username === "adam") ? "block" : "none";
 
-        loadPosts();
+        loadPosts().catch(error=>{
+          console.error('Failed to load forum posts',error);
+          document.getElementById('posts').textContent='Could not load posts. Please refresh or try again later.';
+        });
     } else {
         statusElement.textContent =
             "Not logged in.";
+        document.getElementById('posts').textContent='Sign in to view forum posts.';
         document.getElementById("adminPanel").style.display = "none";
     }
 });
