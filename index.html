@@ -799,7 +799,9 @@ window.addEventListener('message',async event=>{
   const {customToken}=await response.json();
   if(!customToken)throw new Error('Missing custom token');
   await signInWithCustomToken(auth,customToken);
+  accountPopup?.postMessage({type:'adamisbored-handoff-received'},SSO_ACCOUNTS_ORIGIN);
   accountPopup?.close();accountPopup=null;
+  if(typeof closeAccountMenu==='function')closeAccountMenu();
  }catch(error){console.error('Central login failed',error);alert('Central login failed: '+error.message)}
 });
 
