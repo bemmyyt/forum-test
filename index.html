@@ -219,7 +219,7 @@ a{color:#8cc7ff}a:hover{color:#c1e3ff}
 
     <button id="signupBtn">sign up</button>
     <button id="loginBtn">log in</button>
-    <button id="centralLoginBtn" type="button">Open adamisbored Accounts ↗</button>
+    <button id="centralLoginBtn" type="button">Continue with adamisbored Accounts</button>
     <p id="centralLoginStatus" role="status" aria-live="polite" style="font-size:12px;opacity:.8;margin:8px 0"></p>
     <button id="logoutBtn">log out</button>
 	<button id="resetNameButton">reset username</button>
@@ -391,7 +391,8 @@ import {
   signOut,
   onAuthStateChanged,
   GoogleAuthProvider,
-  signInWithPopup
+  signInWithPopup,
+  signInWithCustomToken
 } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
 
 import { pipeline } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.2";
@@ -783,19 +784,32 @@ signupBtn.onclick = async ()=>{
 };
 
 
-// Firebase-only flow: same Firebase project, but separate browser sessions per origin.
-// No Cloud Functions or server-side token exchange is used.
+const SSO_ACCOUNTS_ORIGIN='https://accounts.adamisbored.xyz';
+const SSO_EXCHANGE_URL='https://adamisbored-auth.mymorningcompanion.workers.dev/exchange';
+let accountPopup=null;
 const centralLoginStatus=document.getElementById('centralLoginStatus');
-const accountLoginButton=document.getElementById('centralLoginBtn');
-accountLoginButton.onclick=()=>{
-  const destination='https://accounts.adamisbored.xyz/?return_to='+encodeURIComponent('https://forum.adamisbored.xyz/');
-  window.location.assign(destination);
+document.getElementById('centralLoginBtn').onclick=()=>{
+ centralLoginStatus.textContent='Opening Accounts…';
+ accountPopup=window.open(SSO_ACCOUNTS_ORIGIN+'/?handoff=1&origin='+encodeURIComponent(location.origin),'adamisboredAccounts','width=520,height=720');
+ if(!accountPopup)centralLoginStatus.textContent='Allow popups to sign in with Accounts.';
 };
-const loginReturn=new URLSearchParams(window.location.search);
-if(loginReturn.get('accounts')==='ready'){
-  centralLoginStatus.textContent='Your Accounts login is ready. Sign in to the forum below using the same Firebase email and password, or use its Google login.';
-  history.replaceState(null,'',window.location.pathname+window.location.hash);
-}
+window.addEventListener('message',async event=>{
+ if(event.origin!==SSO_ACCOUNTS_ORIGIN||event.source!==accountPopup)return;
+ if(event.data?.type!=='adamisbored-firebase-handoff'||typeof event.data.idToken!=='string')return;
+ centralLoginStatus.textContent='Signing into forum…';
+ try{
+  const response=await fetch(SSO_EXCHANGE_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({idToken:event.data.idToken})});
+  if(!response.ok)throw Error('Token exchange failed ('+response.status+')');
+  const {customToken}=await response.json();
+  if(!customToken)throw Error('Missing custom token');
+  await signInWithCustomToken(auth,customToken);
+  accountPopup?.postMessage({type:'adamisbored-handoff-received'},SSO_ACCOUNTS_ORIGIN);
+  accountPopup?.close();accountPopup=null;
+  centralLoginStatus.textContent='Signed in successfully.';
+  if(typeof closeAccountMenu==='function')closeAccountMenu();
+ }catch(error){console.error('Accounts sign-in failed',error);centralLoginStatus.textContent='Accounts sign-in failed. Please try again or use the forum login.';}
+});
+
 loginBtn.onclick = async ()=>{
  try{
   await signInWithEmailAndPassword(auth,email.value,password.value);
