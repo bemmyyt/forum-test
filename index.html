@@ -219,6 +219,7 @@ a{color:#8cc7ff}a:hover{color:#c1e3ff}
 
     <button id="signupBtn">sign up</button>
     <button id="loginBtn">log in</button>
+    <button id="centralLoginBtn" type="button">Sign in with adamisbored Accounts ↗</button>
     <button id="logoutBtn">log out</button>
 	<button id="resetNameButton">reset username</button>
 	<button id="devMsgBtn">developer message</button>
@@ -386,6 +387,7 @@ import {
   getAuth,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  signInWithCustomToken,
   signOut,
   onAuthStateChanged,
   GoogleAuthProvider,
@@ -779,6 +781,27 @@ signupBtn.onclick = async ()=>{
                 </div>
             `;
 };
+
+
+const SSO_ACCOUNTS_ORIGIN='https://accounts.adamisbored.xyz';
+const SSO_EXCHANGE_URL='https://europe-west1-base-c4932.cloudfunctions.net/exchangeAccountToken';
+let accountPopup=null;
+document.getElementById('centralLoginBtn').onclick=()=>{
+ accountPopup=window.open(SSO_ACCOUNTS_ORIGIN+'/?handoff=1&origin='+encodeURIComponent(location.origin),'adamisboredAccounts','width=520,height=720');
+ if(!accountPopup)alert('Please allow popups to sign in with Accounts.');
+};
+window.addEventListener('message',async event=>{
+ if(event.origin!==SSO_ACCOUNTS_ORIGIN||event.source!==accountPopup)return;
+ if(event.data?.type!=='adamisbored-firebase-handoff'||typeof event.data.idToken!=='string')return;
+ try{
+  const response=await fetch(SSO_EXCHANGE_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({idToken:event.data.idToken})});
+  if(!response.ok)throw new Error('Account exchange failed ('+response.status+'). Check the Firebase Function deployment.');
+  const {customToken}=await response.json();
+  if(!customToken)throw new Error('Missing custom token');
+  await signInWithCustomToken(auth,customToken);
+  accountPopup?.close();accountPopup=null;
+ }catch(error){console.error('Central login failed',error);alert('Central login failed: '+error.message)}
+});
 
 loginBtn.onclick = async ()=>{
  try{
