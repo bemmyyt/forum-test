@@ -16,6 +16,7 @@ app.use(express.json({ limit: "16kb" }));
 app.use("/v1/forum", rateLimit({ windowMs: 60_000, limit: 60, standardHeaders: "draft-7", legacyHeaders: false }));
 
 const err = (res, status, message) => res.status(status).json({ error: message });
+const visibleContent = d => !d.moderationStatus || d.moderationStatus === "approved";
 const publicPost = d => ({
   text: typeof d.text === "string" ? d.text : "",
   user: typeof d.user === "string" ? d.user : "Unknown user",
@@ -138,11 +139,11 @@ app.get("/v1/forum/feed", async (req, res, next) => {
       db.collection("posts").orderBy("createdAt", "desc").limit(50).get(),
       db.collection("replies").limit(500).get()
     ]);
-    const visiblePosts = posts.docs.filter(d => d.data().moderationStatus !== "pending");
+    const visiblePosts = posts.docs.filter(d => visibleContent(d.data()));
     const ids = new Set(visiblePosts.map(d => d.id));
     res.json({
       posts: visiblePosts.map(d => ({ id: d.id, ...publicPost(d.data()) })),
-      replies: replies.docs.filter(d => ids.has(d.data().postId) && d.data().moderationStatus !== "pending")
+      replies: replies.docs.filter(d => ids.has(d.data().postId) && visibleContent(d.data()))
         .map(d => ({ id: d.id, ...publicReply(d.data()) }))
     });
   } catch (e) { next(e); }
@@ -150,7 +151,7 @@ app.get("/v1/forum/feed", async (req, res, next) => {
 app.get("/v1/forum/posts", async (req, res, next) => {
   try {
     const snap = await db.collection("posts").orderBy("createdAt", "desc").limit(50).get();
-    res.json({ posts: snap.docs.filter(d => d.data().moderationStatus !== "pending").map(d => ({ id: d.id, ...publicPost(d.data()) })) });
+    res.json({ posts: snap.docs.filter(d => visibleContent(d.data())).map(d => ({ id: d.id, ...publicPost(d.data()) })) });
   } catch (e) { next(e); }
 });
 app.get("/v1/forum/replies", async (req, res, next) => {
@@ -158,7 +159,7 @@ app.get("/v1/forum/replies", async (req, res, next) => {
     const postId = req.query.postId;
     if (typeof postId !== "string" || !/^[a-zA-Z0-9]{1,100}$/.test(postId)) return err(res, 400, "Valid postId required");
     const snap = await db.collection("replies").where("postId", "==", postId).limit(100).get();
-    res.json({ replies: snap.docs.filter(d => d.data().moderationStatus !== "pending").map(d => ({ id: d.id, ...publicReply(d.data()) })) });
+    res.json({ replies: snap.docs.filter(d => visibleContent(d.data())).map(d => ({ id: d.id, ...publicReply(d.data()) })) });
   } catch (e) { next(e); }
 });
 app.post("/v1/forum/posts", writingEnabled, requireUser, async (req, res, next) => {
@@ -181,7 +182,7 @@ app.post("/v1/forum/replies", writingEnabled, requireUser, async (req, res, next
       return err(res, 400, "Valid postId and reply text required");
     const [profile, parent] = await Promise.all([allowedUser(req.user.uid), db.collection("posts").doc(postId).get()]);
     if (!profile) return err(res, 403, "Reply not permitted");
-    if (!parent.exists || parent.data().moderationStatus === "pending") return err(res, 404, "Post not found");
+    if (!parent.exists || !visibleContent(parent.data())) return err(res, 404, "Post not found");
     if (!(await moderateText(text.trim(), "reply"))) return err(res, 422, "Reply blocked by moderation");
     const data = { postId, text: text.trim(), user: profile.username, uid: req.user.uid, createdAt: Date.now(), moderationStatus: "approved" };
     if (typeof profile.avatar === "string") data.avatar = profile.avatar;
