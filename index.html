@@ -450,6 +450,15 @@ async function isSevereToxic(text){
   );
 }
 
+async function getMyForumAccount(){
+  if(!auth.currentUser) return null;
+  const token = await auth.currentUser.getIdToken();
+  const response = await fetch("https://api.adamisbored.xyz/v1/forum/me",{
+    headers:{"Authorization":"Bearer "+token},cache:"no-store"
+  });
+  if(!response.ok) throw new Error("Account API unavailable ("+response.status+")");
+  return response.json();
+}
 async function getPublicForumProfile(uid){
   if(!uid || !/^[a-zA-Z0-9]{1,128}$/.test(uid)) return null;
   const response = await fetch("https://api.adamisbored.xyz/v1/forum/profiles/"+encodeURIComponent(uid));
@@ -504,15 +513,9 @@ async function updateForumProfile(changes){
 async function ensureUsername(user){
  if(!user) return null; // must be logged in
 
- const userRef = doc(db,"users",user.uid);
- let existingDoc = await getDoc(userRef);
- if(existingDoc.exists()){
-   const data = existingDoc.data();
-   if(data.username){
-     // Legacy createdAt is optional; API initializes it for new profiles.
-     return data.username;
-   }
- }
+ const account = await getMyForumAccount();
+ if(account?.banned) throw new Error("Account is banned");
+ if(account?.username) return account.username;
 
  let username = prompt("Choose a unique username");
 
@@ -541,9 +544,9 @@ async function loadPosts(){
  // If the current viewer is banned, stop and show banned message
  if(auth.currentUser){
    try{
-     const meDoc = await getDoc(doc(db,'users', auth.currentUser.uid));
-     if(meDoc.exists() && meDoc.data().banned){
-       const banReason = meDoc.data().banReason || 'banned by moderator';
+     const meDoc = await getMyForumAccount();
+    if(meDoc?.banned){
+       const banReason = meDoc.banReason || 'banned by moderator';
        container.innerHTML = `
          <div class="post" style="animation-delay:0s;">
            <div><b>banned.</b></div>
@@ -714,8 +717,8 @@ resetNameButton.onclick = async () => {
   const username = await getUsername(auth.currentUser.uid);
    // ensure we also respect explicit banned flag in user doc
    try{
-     const ud = await getDoc(doc(db,'users', auth.currentUser.uid));
-     if(ud.exists() && ud.data().banned){
+     const ud = await getMyForumAccount();
+    if(ud?.banned){
        document.getElementById("posts").innerHTML = `
           <div class="post" style="animation-delay:0s;">
               <div><b>something went wrong.</b></div>
@@ -1136,9 +1139,9 @@ console.log("wsg login text")
 onAuthStateChanged(auth, async (user2) => {
   if(!user2) return;
   try{
-    const ud = await getDoc(doc(db,'users', user2.uid));
-    if(ud.exists() && ud.data().banned){
-      const banReason = ud.data().banReason || 'you have been banned by a moderator.';
+    const ud = await getMyForumAccount();
+    if(ud?.banned){
+      const banReason = ud.banReason || 'you have been banned by a moderator.';
       document.getElementById('posts').innerHTML = `
         <div class="post" style="animation-delay:0s;">
           <div><b>banned.</b></div>
@@ -1409,8 +1412,8 @@ console.log("posting")
   // include avatar from profile in preview
   let previewAvatar = 'https://www.gravatar.com/avatar/?d=mp&s=80';
   try{
-    const prof = await getDoc(doc(db,'users', auth.currentUser.uid));
-    if(prof.exists()) previewAvatar = prof.data().avatar || previewAvatar;
+    const prof = await getPublicForumProfile(auth.currentUser.uid);
+    if(prof) previewAvatar = safeAvatarUrl(prof.avatar, previewAvatar);
   }catch(e){console.error(e)}
 
 document.getElementById("posts").innerHTML = `
@@ -1731,8 +1734,8 @@ window.openMessages = async function(){
 
   // Check if user is banned
   try{
-    const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
-    if(userDoc.exists() && userDoc.data().banned){
+    const userDoc = await getMyForumAccount();
+    if(userDoc?.banned){
       document.getElementById("posts").innerHTML = `
         <div class="post" style="animation-delay:0s;">
             <div><b>something went wrong.</b></div>
@@ -1771,8 +1774,8 @@ document.getElementById('dmSearchBtn').onclick = async function(){
 
   // Check if user is banned
   try{
-    const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
-    if(userDoc.exists() && userDoc.data().banned){
+    const userDoc = await getMyForumAccount();
+    if(userDoc?.banned){
       alert('you have been banned and cannot message users');
       return;
     }
@@ -1803,8 +1806,8 @@ document.getElementById('sendDmBtn').onclick = async function(){
 
   // Check if user is banned
   try{
-    const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
-    if(userDoc.exists() && userDoc.data().banned){
+    const userDoc = await getMyForumAccount();
+    if(userDoc?.banned){
       alert('you have been banned and cannot send messages');
       return;
     }
@@ -1925,9 +1928,9 @@ window.submitReply = async function(postId){
   const text = input.value.trim();
   if(!text) return;
   const uid = auth.currentUser.uid;
-  const userDoc = await getDoc(doc(db,'users',uid));
-  const username = userDoc.exists() ? userDoc.data().username : auth.currentUser.email;
-  const avatar = userDoc.exists() ? userDoc.data().avatar : null;
+  const profile = await getPublicForumProfile(uid);
+  const username = profile?.username || auth.currentUser.email;
+  const avatar = profile?.avatar || null;
   const replyDoc = {
     postId,
     text,
