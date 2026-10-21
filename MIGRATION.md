@@ -40,3 +40,9 @@ The running Webdock API was installed from an **older branch** and does not have
 - Account eligibility now checks the actual `banned` flag rather than treating usernames containing `ban` as banned.
 - Public API reads now show approved records and legacy records without a moderation status; pending/rejected records are excluded. Firestore fallback still needs equivalent restrictions before launch.
 - No live deployment or integration tests have been performed for these commits. Keep the PR in draft and `ENABLE_WRITES=false`.
+
+## Reusing existing moderation model
+- `MODERATION_PROVIDER=local-toxic-bert` uses the forum's existing `Xenova/toxic-bert` via `@huggingface/transformers@3.7.2` on the Node.js server, with the existing 0.8 non-toxic/toxic threshold logic.
+- Model downloads and initialization may be slow and memory-intensive on first request. This path has NOT been integration-tested or deployed; validate the VPS RAM/CPU, cold-start latency, model cache and network availability on staging.
+- When no provider is configured, writes fail closed. The optional external HTTPS moderation gateway remains supported when `MODERATION_PROVIDER` is not `local-toxic-bert`.
+- `moderationConfigured` only reports configuration presence, not model readiness or successful inference. Keep `ENABLE_WRITES=false` until staging tests and complete Firestore migration.
