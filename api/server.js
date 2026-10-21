@@ -54,12 +54,39 @@ async function allowedUser(uid) {
 }
 function validText(text) { return typeof text === "string" && text.trim().length >= 1 && text.trim().length <= 3000; }
 
+// Reuse the forum's existing Xenova/toxic-bert classifier on the server.
+// Lazy-load once, cache it, and reject all writes if initialization/inference fails.
+let toxicBertPromise;
+async function moderateWithExistingModel(text) {
+  try {
+    if (!toxicBertPromise) {
+      toxicBertPromise = import("@huggingface/transformers")
+        .then(({ pipeline }) => pipeline("text-classification", "Xenova/toxic-bert"))
+        .catch(error => { toxicBertPromise = null; throw error; });
+    }
+    const classifier = await toxicBertPromise;
+    const result = await classifier(text, { top_k: null });
+    const predictions = Array.isArray(result[0]) ? result[0] : result;
+    if (!Array.isArray(predictions) || predictions.length === 0 ||
+        predictions.some(p => typeof p.label !== "string" || !Number.isFinite(p.score)))
+      throw new Error("Invalid toxicity prediction");
+    // Preserve the frontend's existing threshold and labels.
+    return !predictions.some(p => p.label !== "non-toxic" && p.score >= 0.8);
+  } catch (error) {
+    console.error("Local moderation failed:", error?.message || "unknown error");
+    throw Object.assign(new Error("Moderation unavailable"), { status: 503 });
+  }
+}
+
 /**
  * Trusted moderation gateway. The external service must be controlled by the
  * operator and respond with { approved: true|false }. No client-provided
  * toxicity or approval fields are trusted. Failure always rejects the write.
  */
 async function moderateText(text, category) {
+  if (process.env.MODERATION_PROVIDER === "local-toxic-bert") {
+    return moderateWithExistingModel(text);
+  }
   const url = process.env.MODERATION_URL;
   const key = process.env.MODERATION_API_KEY;
   if (!url || !key) throw Object.assign(new Error("Moderation not configured"), { status: 503 });
@@ -142,7 +169,7 @@ app.post("/v1/forum/dms", writingEnabled, requireUser, async (req, res, next) =>
   } catch (e) { next(e); }
 });
 
-app.get("/v1/forum/health", (req, res) => res.json({ ok: true, writesEnabled: enableWrites, moderationConfigured: Boolean(process.env.MODERATION_URL && process.env.MODERATION_API_KEY) }));
+app.get("/v1/forum/health", (req, res) => res.json({ ok: true, writesEnabled: enableWrites, moderationConfigured: process.env.MODERATION_PROVIDER === "local-toxic-bert" || Boolean(process.env.MODERATION_URL && process.env.MODERATION_API_KEY) }));
 app.get("/v1/forum/feed", async (req, res, next) => {
   try {
     const [posts, replies] = await Promise.all([
