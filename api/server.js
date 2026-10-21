@@ -142,7 +142,7 @@ app.post("/v1/forum/dms", writingEnabled, requireUser, async (req, res, next) =>
   } catch (e) { next(e); }
 });
 
-app.get("/v1/forum/health", (req, res) => res.json({ ok: true, writesEnabled: enableWrites }));
+app.get("/v1/forum/health", (req, res) => res.json({ ok: true, writesEnabled: enableWrites, moderationConfigured: Boolean(process.env.MODERATION_URL && process.env.MODERATION_API_KEY) }));
 app.get("/v1/forum/feed", async (req, res, next) => {
   try {
     const [posts, replies] = await Promise.all([
