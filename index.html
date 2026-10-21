@@ -450,9 +450,23 @@ async function isSevereToxic(text){
   );
 }
 
+async function getPublicForumProfile(uid){
+  if(!uid || !/^[a-zA-Z0-9]{1,128}$/.test(uid)) return null;
+  const response = await fetch("https://api.adamisbored.xyz/v1/forum/profiles/"+encodeURIComponent(uid));
+  if(response.status === 404) return null;
+  if(!response.ok) throw new Error("Profile API unavailable ("+response.status+")");
+  const result = await response.json();
+  return result.profile || null;
+}
+async function lookupForumUsername(username){
+  const response = await fetch("https://api.adamisbored.xyz/v1/forum/username/"+encodeURIComponent(username));
+  if(!response.ok) throw new Error("Username lookup unavailable");
+  const result = await response.json();
+  return result.uid || null;
+}
 async function getUsername(uid){
- const d = await getDoc(doc(db,"users",uid));
- return d.exists() ? d.data().username : null;
+ const profile = await getPublicForumProfile(uid);
+ return profile?.username || null;
 }
 
 function safeAvatarUrl(value,fallback){
@@ -469,13 +483,7 @@ function escapeHtml(value){
 }
 
 async function usernameTaken(username){
- const snap = await getDocs(collection(db,"users"));
- let taken = false;
- snap.forEach(d=>{
-   const u = d.data().username;
-   if(u && u.toLowerCase()===username.toLowerCase()) taken=true;
- });
- return taken;
+ return Boolean(await lookupForumUsername(username));
 }
 
 async function updateForumProfile(changes){
@@ -1707,15 +1715,7 @@ async function openDirectMessageThread(partnerUid){
 }
 
 async function findUserByUsername(username){
-  const snap = await getDocs(collection(db, 'users'));
-  let foundUid = null;
-  snap.forEach((userDoc) => {
-    const data = userDoc.data();
-    if(data.username && data.username.toLowerCase() === username.toLowerCase()){
-      foundUid = userDoc.id;
-    }
-  });
-  return foundUid;
+ return lookupForumUsername(username);
 }
 
 window.openMessages = async function(){
@@ -1837,15 +1837,14 @@ window.openProfile = async function(uid){
   const popup = document.getElementById('profilePopup');
   if(!uid){ alert('Profile not available'); return; }
   try{
-    const d = await getDoc(doc(db,'users',uid));
-    if(!d.exists()){ alert('Profile not found'); return; }
-    const data = d.data();
+    const data = await getPublicForumProfile(uid);
+    if(!data){ alert('Profile not found'); return; }
     document.getElementById('profileUsername').textContent = data.username || 'unknown user';
     document.getElementById('profileTitle').textContent = data.username ? data.username + "'s profile" : 'profile';
     document.getElementById('profileEmail').textContent = data.rank || 'forum user';
     document.getElementById('profileJoinDate').textContent = `Joined ${formatJoinDate(data.createdAt || data.joinDate || data.joinedAt)}`;
     const badges = data.badges || [];
-    document.getElementById('profileBadges').innerHTML = badges.map(b=>`<span class="badge">${b}</span>`).join('');
+    document.getElementById('profileBadges').innerHTML = badges.map(b=>`<span class="badge">${escapeHtml(b)}</span>`).join('');
     document.getElementById('profileBio').textContent = data.bio || 'No bio';
     document.getElementById('profileAvatar').src = data.avatar || 'https://www.gravatar.com/avatar/?d=mp&s=80';
     document.getElementById('editProfileForm').style.display = 'none';
