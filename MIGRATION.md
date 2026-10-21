@@ -91,3 +91,12 @@ The running Webdock API was installed from an **older branch** and does not have
 - Username claims are transactional for new API writes; existing usernames are checked against legacy user documents. Legacy claim migration and simultaneous registration tests remain required.
 - Remaining public user document reads mean privacy is **not yet fixed**. Publishing candidate rules now would still expose legacy user email fields to public readers. Migrate profile reads to safe API projections and restrict client rules before production release.
 - No VPS access or Firebase emulator was used in these checks. Deployment remains blocked.
+
+## Profile privacy milestone (2026-10-21)
+- [x] Added `GET /v1/forum/profiles/:uid` with public-only fields and no email or ban reason.
+- [x] Added `GET /v1/forum/username/:name` supporting username claims and legacy accounts.
+- [x] Switched frontend username checks, username lookup, public profile popup, post author details and DM display names to those API endpoints.
+- [ ] Remaining direct `users` reads in the frontend still include authenticated self/account state and DM permission checks; replace with appropriately scoped `/me` data before tightening Firestore reads.
+- [ ] Candidate Firestore rules currently allow public reads of full `users` documents; **do not publish** until all frontend consumers are migrated and profile visibility rules are redesigned.
+- [ ] Add emulator-backed integration tests and measure performance: the legacy username lookup currently scans all user documents.
+- [ ] Verify the new profile endpoints and frontend syntax in CI, then stage and smoke-test; no production deployment yet.
