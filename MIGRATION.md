@@ -46,3 +46,21 @@ The running Webdock API was installed from an **older branch** and does not have
 - Model downloads and initialization may be slow and memory-intensive on first request. This path has NOT been integration-tested or deployed; validate the VPS RAM/CPU, cold-start latency, model cache and network availability on staging.
 - When no provider is configured, writes fail closed. The optional external HTTPS moderation gateway remains supported when `MODERATION_PROVIDER` is not `local-toxic-bert`.
 - `moderationConfigured` only reports configuration presence, not model readiness or successful inference. Keep `ENABLE_WRITES=false` until staging tests and complete Firestore migration.
+
+## Release goal and acceptance criteria (2026-10-21)
+**Goal:** A forum where all content/admin writes are server-authorized, server-moderated, and functional for existing accounts; private DMs remain participant-only; public reads survive a temporary API outage without permitting unmoderated writes.
+
+- [x] API routes for posts, replies, DMs, bans/unbans, and post/reply deletes committed to draft branch
+- [x] Frontend post/reply/DM sends and admin ban/unban/delete UI routed through API
+- [ ] Review every remaining client Firestore write, including profile updates, username resets, account initialization, and legacy self-ban behavior; restrict rules to prevent bypass
+- [ ] Add API-only profile/account update routes or strictly scoped Firestore rules with server-owned ban/admin fields
+- [ ] Replace username-based admin UI checks with UID-based authorization; verify admin listing/search privacy
+- [ ] Audit and test HTML rendering against XSS, especially user-generated names, posts, and moderation search results
+- [ ] Confirm API feed and safe Firestore read-only fallback behave consistently with moderation states
+- [ ] Test cold-start toxic-bert on staging VPS, moderation false positives, CPU/RAM, timeouts and failure mode
+- [ ] Add automated endpoint tests for auth, authorization, DMs, moderation, rate limits, and error handling
+- [ ] Verify legacy data compatibility and DM pagination; verify Firebase security rules in emulator
+- [ ] Deploy backend first in read-only mode, smoke-test, stage frontend, then enable writes only after checks pass
+- [ ] Merge only after smoke tests and rollback plan. No production changes have been made by these GitHub commits.
+
+**Critical:** Current branch frontend is NOT safe to deploy against the old read-only API. Keep PR draft and `ENABLE_WRITES=false`.
