@@ -177,9 +177,6 @@ app.post("/v1/forum/me/profile", writingEnabled, requireUser, async (req, res, n
         Object.keys(body).some(k => !["username", "bio", "avatar", "resetUsername"].includes(k)))
       return err(res, 400, "Unsupported profile fields");
     const ref = db.collection("users").doc(req.user.uid);
-    const current = await ref.get();
-    const existing = current.exists ? current.data() : {};
-    if (existing.banned === true) return err(res, 403, "Profile changes not permitted");
     const update = {};
     if (body.resetUsername === true) {
       if (body.username !== undefined) return err(res, 400, "Conflicting username fields");
@@ -188,17 +185,7 @@ app.post("/v1/forum/me/profile", writingEnabled, requireUser, async (req, res, n
     if (body.username !== undefined) {
       if (typeof body.username !== "string" || !/^[a-zA-Z0-9_]{1,20}$/.test(body.username))
         return err(res, 400, "Invalid username");
-      const same = typeof existing.username === "string" &&
-        existing.username.toLowerCase() === body.username.toLowerCase();
-      if (!same) {
-        const existingNames = await db.collection("users").get();
-        if (existingNames.docs.some(d => d.id !== req.user.uid &&
-            typeof d.data().username === "string" &&
-            d.data().username.toLowerCase() === body.username.toLowerCase()))
-          return err(res, 409, "Username already taken");
-      }
       update.username = body.username;
-      if (!existing.backupname) update.backupname = body.username;
     }
     if (body.bio !== undefined) {
       if (typeof body.bio !== "string" || body.bio.length > 1000) return err(res, 400, "Invalid bio");
@@ -213,12 +200,47 @@ app.post("/v1/forum/me/profile", writingEnabled, requireUser, async (req, res, n
       update.avatar = body.avatar;
     }
     if (!Object.keys(update).length) return err(res, 400, "No profile changes");
-    if (!current.exists) {
-      update.createdAt = Date.now();
-      update.uid = req.user.uid;
-      update.email = req.user.email || null;
+    // Legacy users did not have username claim documents. Check the existing
+    // names before reserving a new claim. All NEW claims are atomic below.
+    const desired = typeof update.username === "string" && update.username
+      ? update.username.toLowerCase() : null;
+    if (desired) {
+      const legacy = await db.collection("users").get();
+      if (legacy.docs.some(d => d.id !== req.user.uid &&
+          typeof d.data().username === "string" &&
+          d.data().username.toLowerCase() === desired))
+        return err(res, 409, "Username already taken");
     }
-    await ref.set(update, { merge: true });
+    const outcome = await db.runTransaction(async tx => {
+      const current = await tx.get(ref);
+      const existing = current.exists ? current.data() : {};
+      if (existing.banned === true) return "banned";
+      const oldName = typeof existing.username === "string" && existing.username
+        ? existing.username.toLowerCase() : null;
+      const nextName = body.resetUsername === true ? null : desired || oldName;
+      const oldClaim = oldName ? db.collection("usernameClaims").doc(oldName) : null;
+      const newClaim = nextName ? db.collection("usernameClaims").doc(nextName) : null;
+      // Firestore transactions require all reads before writes.
+      const oldClaimSnap = oldClaim ? await tx.get(oldClaim) : null;
+      const newClaimSnap = newClaim && (!oldClaim || oldClaim.path !== newClaim.path)
+        ? await tx.get(newClaim) : oldClaimSnap;
+      if (newClaimSnap?.exists && newClaimSnap.data().uid !== req.user.uid) return "taken";
+      if (oldClaimSnap?.exists && oldClaimSnap.data().uid !== req.user.uid) return "taken";
+      if (oldClaim && oldClaim.path !== newClaim?.path && oldClaimSnap?.exists)
+        tx.delete(oldClaim);
+      if (newClaim) tx.set(newClaim, { uid: req.user.uid, claimedAt: Date.now() });
+      const data = { ...update };
+      if (desired && !existing.backupname) data.backupname = update.username;
+      if (!current.exists) {
+        data.createdAt = Date.now();
+        data.uid = req.user.uid;
+        data.email = req.user.email || null;
+      }
+      tx.set(ref, data, { merge: true });
+      return "ok";
+    });
+    if (outcome === "banned") return err(res, 403, "Profile changes not permitted");
+    if (outcome === "taken") return err(res, 409, "Username already taken");
     res.set("Cache-Control", "no-store");
     res.json({ ok: true });
   } catch (e) { next(e); }
