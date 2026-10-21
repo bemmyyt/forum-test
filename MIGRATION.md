@@ -107,3 +107,9 @@ The running Webdock API was installed from an **older branch** and does not have
 Progress: Draft frontend now has zero `getDoc(` calls and no direct Firestore writes. Remaining `getDocs(` calls read public posts/replies and legacy `devmsg`; review `devmsg` compatibility. Candidate rules now deny all client reads/writes to `users`, but **must not be published yet**. Posting preview and API error interpolations were escaped to reduce XSS risk.
 
 **Deployment hold:** The draft frontend expects new API endpoints absent from the currently deployed backend. `ENABLE_WRITES=false` is intentional. Do not merge, flip this switch, or publish the candidate rules until emulator/browser tests and staged deployment are complete.
+
+## Automated test status
+- GitHub Actions run for commit `d14c987e6f92ac34eb7c80eaa9a4a49539612a5b` completed **successfully**. It runs Node syntax checks and seven static security-contract checks.
+- These are not Firebase emulator, browser, model-inference or real-user integration tests.
+- A non-destructive read-only staging smoke script is now available: `FORUM_STAGING_API=https://your-staging-api.example node api/test/staging-smoke.js`. It verifies health, feed, unauthenticated endpoint denial and writes-disabled status. Do not point it at production without understanding the expected configuration; it intentionally requires writes disabled.
+- Next: prepare isolated staging credentials, Firebase emulator rules tests, browser DM/account smoke tests and moderation-model load testing. Keep live `ENABLE_WRITES=false`.
