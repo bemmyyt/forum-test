@@ -628,9 +628,8 @@ async function loadPosts(){
    let displayName = data.user || 'unknown user';
    let badgesHtml = '';
    try{
-     const prof = await getDoc(doc(db,'users', data.uid || ''));
-     if(prof.exists()){
-       const pd = prof.data();
+     const pd = await getPublicForumProfile(data.uid || '');
+     if(pd){
        if(pd.banned){
          return;
        }
@@ -1573,10 +1572,8 @@ function getConversationId(uidA, uidB){
 async function getDisplayName(uid){
   if(!uid) return 'Unknown user';
   try{
-    const userDoc = await getDoc(doc(db, 'users', uid));
-    if(userDoc.exists() && userDoc.data().username){
-      return userDoc.data().username;
-    }
+    const profile = await getPublicForumProfile(uid);
+    if(profile?.username) return profile.username;
   }catch(e){
     console.error('Could not load user display name', e);
   }
