@@ -1481,21 +1481,28 @@ document.getElementById('listUsersBtn').onclick = async function(){
       const banBtn = document.createElement('button');
       banBtn.textContent = d.banned ? 'Unban' : 'Ban';
       banBtn.onclick = async ()=>{
-        if(d.banned){
-          // unban
-          await setDoc(doc(db,'users',u.id),{banned:false,banCode:null,banReason:null},{merge:true});
-        } else {
-          // ban
-          const reason = prompt(`Enter a ban reason for ${d.username || 'this user'}:`);
-          if(reason === null) return;
-          await setDoc(doc(db,'users',u.id),{
-            banned:true,
-            banCode:'manual',
-            banReason: reason.trim() || 'unknown'
-          },{merge:true});
-        }
-        // refresh list
-        document.getElementById('listUsersBtn').click();
+        try {
+          if(!auth.currentUser) throw new Error('Sign in required');
+          const token = await auth.currentUser.getIdToken();
+          let reason = '';
+          if(!d.banned){
+            const entered = prompt(`Enter a ban reason for ${d.username || 'this user'}:`);
+            if(entered === null) return;
+            reason = entered.trim() || 'unknown';
+          }
+          const action = d.banned ? 'unban' : 'ban';
+          const response = await fetch('https://api.adamisbored.xyz/v1/forum/admin/users/' +
+            encodeURIComponent(u.id) + '/' + action, {
+            method:'POST',
+            headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},
+            body:JSON.stringify(action === 'ban' ? {reason} : {})
+          });
+          if(!response.ok){
+            const detail = await response.json().catch(()=>({}));
+            throw new Error(detail.error || 'Admin request failed ('+response.status+')');
+          }
+          document.getElementById('listUsersBtn').click();
+        }catch(error){ alert(error.message || 'Admin request failed'); }
       };
       div.appendChild(document.createElement('br'));
       div.appendChild(banBtn);
@@ -1504,13 +1511,19 @@ document.getElementById('listUsersBtn').onclick = async function(){
   }catch(e){console.error(e);container.textContent='Could not load users.'}
 };
 
-async function banUserById(uid){
-  await setDoc(doc(db,'users',uid),{banned:true,banCode:'manual'},{merge:true});
+async function adminBanRequest(uid, action, reason=''){
+  if(!auth.currentUser) throw new Error('Sign in required');
+  const token = await auth.currentUser.getIdToken();
+  const response = await fetch('https://api.adamisbored.xyz/v1/forum/admin/users/' +
+    encodeURIComponent(uid) + '/' + action, {
+    method:'POST',
+    headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},
+    body:JSON.stringify(action === 'ban' ? {reason:reason || 'manual'} : {})
+  });
+  if(!response.ok) throw new Error((await response.json().catch(()=>({}))).error || 'Admin request failed');
 }
-
-async function unbanUserById(uid){
-  await setDoc(doc(db,'users',uid),{banned:false,banCode:null},{merge:true});
-}
+async function banUserById(uid){ return adminBanRequest(uid,'ban','manual'); }
+async function unbanUserById(uid){ return adminBanRequest(uid,'unban'); }
 
 window.openAccountMenu = function(){
   const menu = document.getElementById('accountMenu');
