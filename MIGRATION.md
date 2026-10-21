@@ -72,3 +72,14 @@ The running Webdock API was installed from an **older branch** and does not have
 - The browser still performs some client-side moderation and username resets. Move moderation policy decisions to the API, and avoid direct client mutations of security fields.
 - New `/v1/forum/me` returns server-calculated admin permission; `ADMIN_UIDS` must be configured with trusted Firebase UIDs, never display names.
 - Model integration and endpoints have NOT been run in CI or on the VPS. Run `npm install`, `npm run check`, emulator tests and smoke tests in staging first. This document is not evidence that any test passed.
+
+## Additional implementation status
+- [x] Profile creation, username changes, username reset and avatar/bio edits now call authenticated `POST /v1/forum/me/profile` in the draft frontend.
+- [x] Audit found zero remaining direct `addDoc`, `setDoc`, `updateDoc`, or `deleteDoc` calls in `index.html` at this revision.
+- [x] Candidate Firestore rules now deny all client writes to posts, replies, DMs and user profiles; **not published**.
+- [x] CI workflow added for Node backend and inline frontend JavaScript syntax; **checks not yet confirmed passing**.
+- [ ] Username uniqueness currently uses a read-before-write scan and is **not concurrency-safe**; replace with an atomic username claim/transaction before release.
+- [ ] Existing public `users` reads can expose email/other private profile fields; migrate public profile reads to API projections and tighten rules.
+- [ ] Verify remaining unsafe HTML interpolation, legacy admin UI and account lifecycle; run Firebase emulator tests.
+- [ ] Confirm API-first frontend behavior under outage. Public feed may fall back read-only; all writes must fail closed.
+- [ ] Stage, test, configure `ADMIN_UIDS`, deploy backend and frontend in a controlled release.
