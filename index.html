@@ -576,7 +576,7 @@ async function loadPosts(){
    }
    notice.textContent = window.__forumApiReadOnly
      ? "API unavailable — public feed fallback (read-only preview)."
-     : "API feed preview — posting still uses the existing website until security migration is finished.";
+     : "API feed preview — posts, replies and deletions are disabled while testing.";
  } else {
    snap = await getDocs(collection(db,"posts"));
    repliesSnap = await getDocs(collection(db,'replies'));
@@ -652,6 +652,7 @@ async function loadPosts(){
       deleteBtn.textContent = "Delete";
 
       deleteBtn.onclick = async () => {
+         if (new URLSearchParams(location.search).get("forumApiPreview") === "1") { alert("API preview is read-only."); return; }
          await deleteDoc(doc(db, "posts", postDoc.id));
          loadPosts();
       };
@@ -1126,6 +1127,7 @@ onAuthStateChanged(auth, async (user2) => {
 // a startup timer must never overwrite content after a successful sign-in.
 
 postBtn.onclick = async ()=>{
+ if (new URLSearchParams(location.search).get("forumApiPreview") === "1") { alert("API preview is read-only. Posting is disabled."); return; }
  if(!auth.currentUser){
         document.getElementById("posts").innerHTML = `
   <div class="post">
@@ -1876,6 +1878,7 @@ window.openReplyBox = function(postId){
 };
 
 window.submitReply = async function(postId){
+  if (new URLSearchParams(location.search).get("forumApiPreview") === "1") { alert("API preview is read-only. Replies are disabled."); return; }
   if(!auth.currentUser){ alert('please log in to reply'); return; }
   const input = document.getElementById(`replyInput-${postId}`);
   if(!input) return;
