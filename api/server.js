@@ -245,6 +245,38 @@ app.post("/v1/forum/me/profile", writingEnabled, requireUser, async (req, res, n
     res.json({ ok: true });
   } catch (e) { next(e); }
 });
+// Public profiles intentionally exclude email, bans, auth and internal flags.
+const profileProjection = (id, d) => ({
+  uid: id,
+  username: typeof d.username === "string" ? d.username : "",
+  bio: typeof d.bio === "string" ? d.bio : "",
+  avatar: typeof d.avatar === "string" ? d.avatar : "",
+  rank: typeof d.rank === "string" ? d.rank : "forum user",
+  badges: Array.isArray(d.badges) ? d.badges.filter(v => typeof v === "string").slice(0,20) : [],
+  createdAt: d.createdAt || null
+});
+app.get("/v1/forum/profiles/:uid", async (req, res, next) => {
+  try {
+    const uid = req.params.uid;
+    if (!/^[a-zA-Z0-9]{1,128}$/.test(uid)) return err(res, 400, "Invalid UID");
+    const doc = await db.collection("users").doc(uid).get();
+    if (!doc.exists) return err(res, 404, "Profile not found");
+    res.json({ profile: profileProjection(doc.id, doc.data()) });
+  } catch(e) { next(e); }
+});
+app.get("/v1/forum/username/:name", async (req, res, next) => {
+  try {
+    const name = req.params.name;
+    if (!/^[a-zA-Z0-9_]{1,20}$/.test(name)) return err(res, 400, "Invalid username");
+    const claim = await db.collection("usernameClaims").doc(name.toLowerCase()).get();
+    if (claim.exists) return res.json({ uid: claim.data().uid });
+    // Compatibility with pre-migration users without username claims.
+    const legacy = await db.collection("users").get();
+    const match = legacy.docs.find(d => typeof d.data().username === "string" &&
+      d.data().username.toLowerCase() === name.toLowerCase());
+    res.json({ uid: match ? match.id : null });
+  } catch(e) { next(e); }
+});
 app.get("/v1/forum/me", requireUser, async (req, res, next) => {
   try {
     const profile = await db.collection("users").doc(req.user.uid).get();
