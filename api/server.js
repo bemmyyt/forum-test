@@ -52,6 +52,31 @@ async function allowedUser(uid) {
   return data;
 }
 function validText(text) { return typeof text === "string" && text.trim().length >= 1 && text.trim().length <= 3000; }
+
+/**
+ * Trusted moderation gateway. The external service must be controlled by the
+ * operator and respond with { approved: true|false }. No client-provided
+ * toxicity or approval fields are trusted. Failure always rejects the write.
+ */
+async function moderateText(text, category) {
+  const url = process.env.MODERATION_URL;
+  const key = process.env.MODERATION_API_KEY;
+  if (!url || !key) throw Object.assign(new Error("Moderation not configured"), { status: 503 });
+  const parsed = new URL(url);
+  if (parsed.protocol !== "https:") throw Object.assign(new Error("Moderation requires HTTPS"), { status: 503 });
+  const response = await fetch(parsed, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + key },
+    body: JSON.stringify({ text, category }),
+    signal: AbortSignal.timeout(5000)
+  });
+  if (!response.ok) throw Object.assign(new Error("Moderation unavailable"), { status: 503 });
+  const result = await response.json();
+  if (typeof result?.approved !== "boolean")
+    throw Object.assign(new Error("Invalid moderation response"), { status: 503 });
+  return result.approved;
+}
+
 function writingEnabled(req, res, next) { return enableWrites ? next() : err(res, 503, "Forum API is in read-only mode"); }
 
 
@@ -94,9 +119,15 @@ app.post("/v1/forum/dms", writingEnabled, requireUser, async (req, res, next) =>
       allowedUser(req.user.uid), allowedUser(recipientUid)
     ]);
     if (!sender || !recipient) return err(res, 403, "Messaging not permitted");
-    // Fail closed until a trusted server-side moderation decision is implemented.
-    // Do not store unmoderated DMs, even if the browser reports 'toxic: false'.
-    return err(res, 503, "DM sending is disabled pending server-side moderation");
+    if (!(await moderateText(text.trim(), "dm"))) return err(res, 422, "Message blocked by moderation");
+    const data = {
+      senderUid: req.user.uid, recipientUid,
+      conversationId: [req.user.uid, recipientUid].sort().join("__"),
+      text: text.trim(), toxic: false, createdAt: Date.now()
+    };
+    const created = await db.collection("directMessages").add(data);
+    res.set("Cache-Control", "no-store");
+    return res.status(201).json({ id: created.id });
   } catch (e) { next(e); }
 });
 
@@ -136,8 +167,8 @@ app.post("/v1/forum/posts", writingEnabled, requireUser, async (req, res, next) 
     if (!validText(text)) return err(res, 400, "Post text must contain 1–3000 characters");
     const profile = await allowedUser(req.user.uid);
     if (!profile) return err(res, 403, "Posting not permitted");
-    // IMPORTANT: Enabling writes also requires a real server-side moderation policy.
-    const data = { text: text.trim(), user: profile.username, uid: req.user.uid, createdAt: Date.now(), moderationStatus: "pending", toxic: false };
+    if (!(await moderateText(text.trim(), "post"))) return err(res, 422, "Post blocked by moderation");
+    const data = { text: text.trim(), user: profile.username, uid: req.user.uid, createdAt: Date.now(), moderationStatus: "approved", toxic: false };
     if (typeof profile.avatar === "string") data.avatar = profile.avatar;
     const ref = await db.collection("posts").add(data);
     res.status(201).json({ id: ref.id });
@@ -150,8 +181,9 @@ app.post("/v1/forum/replies", writingEnabled, requireUser, async (req, res, next
       return err(res, 400, "Valid postId and reply text required");
     const [profile, parent] = await Promise.all([allowedUser(req.user.uid), db.collection("posts").doc(postId).get()]);
     if (!profile) return err(res, 403, "Reply not permitted");
-    if (!parent.exists) return err(res, 404, "Post not found");
-    const data = { postId, text: text.trim(), user: profile.username, uid: req.user.uid, createdAt: Date.now(), moderationStatus: "pending" };
+    if (!parent.exists || parent.data().moderationStatus === "pending") return err(res, 404, "Post not found");
+    if (!(await moderateText(text.trim(), "reply"))) return err(res, 422, "Reply blocked by moderation");
+    const data = { postId, text: text.trim(), user: profile.username, uid: req.user.uid, createdAt: Date.now(), moderationStatus: "approved" };
     if (typeof profile.avatar === "string") data.avatar = profile.avatar;
     const ref = await db.collection("replies").add(data);
     res.status(201).json({ id: ref.id });
@@ -171,6 +203,7 @@ app.delete("/v1/forum/posts/:id", writingEnabled, requireUser, async (req, res, 
 });
 app.use((error, req, res, next) => {
   console.error("Forum API error:", error);
+  if (error?.status === 503) return err(res, 503, "Moderation service unavailable");
   if (error?.type === "entity.parse.failed") return err(res, 400, "Invalid JSON");
   if (error?.type === "entity.too.large") return err(res, 413, "Request too large");
   return err(res, 500, "Internal server error");
