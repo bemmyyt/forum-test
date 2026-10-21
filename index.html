@@ -548,10 +548,39 @@ async function loadPosts(){
  // viewer username (allow admin to still see banned users' posts)
  const viewerUsername = auth.currentUser ? await getUsername(auth.currentUser.uid) : null;
 
- const snap = await getDocs(collection(db,"posts"));
-
- // load all replies once and group by postId
- const repliesSnap = await getDocs(collection(db,'replies'));
+ // Staged API feed: opt-in with ?forumApiPreview=1; live mode stays unchanged.
+ let snap, repliesSnap;
+ if (new URLSearchParams(location.search).get("forumApiPreview") === "1") {
+   try {
+     const response = await fetch("https://api.adamisbored.xyz/v1/forum/feed", { signal: AbortSignal.timeout(5000) });
+     if (!response.ok) throw new Error("API unavailable");
+     const feed = await response.json();
+     if (!Array.isArray(feed.posts) || !Array.isArray(feed.replies)) throw new Error("Invalid API feed");
+     const snapshot = (items) => ({ docs: items.map(item => ({
+       id: item.id, data: () => item
+     })), forEach(callback) { this.docs.forEach(callback); } });
+     snap = snapshot(feed.posts);
+     repliesSnap = snapshot(feed.replies);
+     window.__forumApiReadOnly = false;
+   } catch (error) {
+     snap = await getDocs(collection(db,"posts"));
+     repliesSnap = await getDocs(collection(db,'replies'));
+     window.__forumApiReadOnly = true;
+   }
+   let notice = document.getElementById("forumApiPreviewNotice");
+   if (!notice) {
+     notice = document.createElement("div");
+     notice.id = "forumApiPreviewNotice";
+     notice.style.cssText = "padding:12px;margin:10px 0;border:1px solid #b9a47a;border-radius:8px;background:#fff8e5;color:#403318";
+     container.before(notice);
+   }
+   notice.textContent = window.__forumApiReadOnly
+     ? "API unavailable — public feed fallback (read-only preview)."
+     : "API feed preview — posting still uses the existing website until security migration is finished.";
+ } else {
+   snap = await getDocs(collection(db,"posts"));
+   repliesSnap = await getDocs(collection(db,'replies'));
+ }
  const repliesByPost = {};
  repliesSnap.forEach(r => {
    const rd = r.data();
