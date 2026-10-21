@@ -1356,7 +1356,7 @@ for (const phrase of bannedPhrases) {
         document.getElementById("posts").innerHTML = `
   <div class="post" style="animation-delay:0s;">
     <div><b>message not posted</b></div>
-    <div style="margin:8px 0">"${text}" is not allowed to be posted on this forum.</div>
+    <div style="margin:8px 0">"${escapeHtml(text)}" is not allowed to be posted on this forum.</div>
   </div>
 `;
 scheduleLanguageUpdate();
@@ -1398,7 +1398,7 @@ setTimeout(() => {
    document.getElementById("posts").innerHTML = `
      <div class="post">
        <b>message not posted</b>
-       <div style="margin:8px 0">${error.message || "mod unavailable"}</div>
+       <div style="margin:8px 0">${escapeHtml(error.message || "mod unavailable")}</div>
      </div>
    `;
    return;
@@ -1419,10 +1419,10 @@ console.log("posting")
 document.getElementById("posts").innerHTML = `
   <div class="post" style="animation-delay:0s;">
     <div style="display:flex;align-items:center">
-      <img src="${previewAvatar}" class="avatar" alt="avatar">
-      <div style="margin-left:8px"><b>${username}</b></div>
+      <img src="${safeAvatarUrl(previewAvatar, "https://www.gravatar.com/avatar/?d=mp&s=80")}" class="avatar" alt="avatar">
+      <div style="margin-left:8px"><b>${escapeHtml(username)}</b></div>
     </div>
-    <div style="margin:8px 0">${text}</div>
+    <div style="margin:8px 0">${escapeHtml(text)}</div>
     <div class="meta">[message preview] posting in progress...</div>
   </div>
 `;
@@ -1954,7 +1954,7 @@ window.submitReply = async function(postId){
     document.getElementById("posts").innerHTML = `
       <div class="post">
         <b>reply not saved</b>
-        <div style="margin:8px 0">${error.message || "mod unavailable"}</div>
+        <div style="margin:8px 0">${escapeHtml(error.message || "mod unavailable")}</div>
       </div>
     `;
 
