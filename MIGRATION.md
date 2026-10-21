@@ -100,3 +100,10 @@ The running Webdock API was installed from an **older branch** and does not have
 - [ ] Candidate Firestore rules currently allow public reads of full `users` documents; **do not publish** until all frontend consumers are migrated and profile visibility rules are redesigned.
 - [ ] Add emulator-backed integration tests and measure performance: the legacy username lookup currently scans all user documents.
 - [ ] Verify the new profile endpoints and frontend syntax in CI, then stage and smoke-test; no production deployment yet.
+
+## Goal: safe API-only release
+**Release acceptance criteria:** (1) no direct client reads/writes of private `users` docs; (2) all client writes mediated by verified Firebase Auth API; (3) no publicly readable DMs; (4) no unreviewed content bypasses moderation; (5) emulator integration and browser smoke tests pass; (6) API deployment verified before switching frontend; (7) rollback documented and exercised.
+
+Progress: Draft frontend now has zero `getDoc(` calls and no direct Firestore writes. Remaining `getDocs(` calls read public posts/replies and legacy `devmsg`; review `devmsg` compatibility. Candidate rules now deny all client reads/writes to `users`, but **must not be published yet**. Posting preview and API error interpolations were escaped to reduce XSS risk.
+
+**Deployment hold:** The draft frontend expects new API endpoints absent from the currently deployed backend. `ENABLE_WRITES=false` is intentional. Do not merge, flip this switch, or publish the candidate rules until emulator/browser tests and staged deployment are complete.
