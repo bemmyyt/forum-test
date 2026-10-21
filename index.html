@@ -532,7 +532,7 @@ async function loadPosts(){
  if(auth.currentUser){
    try{
      const meDoc = await getDoc(doc(db,'users', auth.currentUser.uid));
-     if(meDoc.exists() && meDoc.data().banned && (await getUsername(auth.currentUser.uid)) !== 'skbidi676767676767676676767'){
+     if(meDoc.exists() && meDoc.data().banned){
        const banReason = meDoc.data().banReason || 'banned by moderator';
        container.innerHTML = `
          <div class="post" style="animation-delay:0s;">
@@ -603,7 +603,7 @@ async function loadPosts(){
      const prof = await getDoc(doc(db,'users', data.uid || ''));
      if(prof.exists()){
        const pd = prof.data();
-       if(pd.banned && viewerUsername !== 'adam'){
+       if(pd.banned){
          return;
        }
        avatarUrl = pd.avatar || avatarUrl;
@@ -647,7 +647,7 @@ async function loadPosts(){
   ${repliesHtml}
    `;
 
-   if (currentUsername === "adam") {
+   if (auth.currentUser && (auth.currentUser.uid === data.uid || window.__forumIsAdmin === true)) {
       const deleteBtn = document.createElement("button");
       deleteBtn.textContent = "Delete";
 
@@ -1367,10 +1367,6 @@ setTimeout(() => {
 
    if(await isSevereToxic(text)){
      const banReason = banReasons.severe_toxic;
-     await setDoc(doc(db, "users", user.uid), {
-       banned: true,
-       banCode: banReason.code
-     }, { merge: true });
 
      document.getElementById("posts").innerHTML = `
        <div class="post">
@@ -1450,7 +1446,7 @@ document.getElementById("searchBtn").onclick = async () => {
 
    const div=document.createElement("div");
    div.className="post";
-   div.innerHTML=`<b>${data.user}</b><br>${data.uid}<br>${data.text}`;
+   div.innerHTML=`<b>${escapeHtml(data.user)}</b><br>${escapeHtml(data.uid)}<br>${escapeHtml(data.text)}`;
 
    const btn=document.createElement("button");
    btn.textContent="Delete";
@@ -1488,7 +1484,7 @@ document.getElementById('listUsersBtn').onclick = async function(){
       const d = u.data();
       const div = document.createElement('div');
       div.className='post';
-      div.innerHTML = `<b>${d.username || '(no username)'}</b> <span class="meta">${d.email||''}</span> <div style="margin-top:6px">${d.badges? d.badges.map(b=>`<span class='badge'>${b}</span>`).join(' ') : ''}</div>${d.banned && d.banReason ? `<div class="meta" style="margin-top:6px">Ban reason: ${d.banReason}</div>` : ''}`;
+      div.innerHTML = `<b>${escapeHtml(d.username || '(no username)')}</b> <span class="meta">${escapeHtml(d.email||'')}</span> <div style="margin-top:6px">${d.badges? d.badges.map(b=>`<span class='badge'>${escapeHtml(b)}</span>`).join(' ') : ''}</div>${d.banned && d.banReason ? `<div class="meta" style="margin-top:6px">Ban reason: ${escapeHtml(d.banReason)}</div>` : ''}`;
       const banBtn = document.createElement('button');
       banBtn.textContent = d.banned ? 'Unban' : 'Ban';
       banBtn.onclick = async ()=>{
