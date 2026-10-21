@@ -592,6 +592,13 @@ async function loadPosts(){
    snap = await getDocs(collection(db,"posts"));
    repliesSnap = await getDocs(collection(db,'replies'));
  }
+ // Legacy documents without a moderationStatus remain visible; never show rejected/pending items.
+ const visibleForumDoc = d => !d.moderationStatus || d.moderationStatus === "approved";
+ snap = { ...snap, docs: snap.docs.filter(d => visibleForumDoc(d.data())) };
+ repliesSnap = { ...repliesSnap,
+   docs: repliesSnap.docs.filter(d => visibleForumDoc(d.data())),
+   forEach(callback) { this.docs.forEach(callback); }
+ };
  const repliesByPost = {};
  repliesSnap.forEach(r => {
    const rd = r.data();
