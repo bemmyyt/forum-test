@@ -21,12 +21,17 @@ The running Webdock API was installed from an **older branch** and does not have
 
 ## DM API progress (2026-10-21)
 - Added `GET /v1/forum/dms` and `GET /v1/forum/dms?partner=UID` requiring a verified Firebase ID token. Both query sender/recipient by the authenticated UID and never expose unrelated messages.
-- Frontend DM reads now call the authenticated API; unrestricted Firestore DM collection reads were removed. Direct DM **writes still use Firestore** and must be migrated before API-only rules.
+- Frontend DM reads now call the authenticated API; unrestricted Firestore DM collection reads were removed. Direct DM writes have since been migrated to the API in this branch.
 - Both queries are capped at 500 documents each; implement pagination before considering this a complete DM history solution.
 - Deploy the matching backend and frontend **together on staging**; do not merge this draft yet. Test existing conversations, sending, banned users, offline behavior, and token expiration.
 - Existing public `users` reads and admin writes still require migration; the currently published emergency Firestore rules may disable admin functionality. Never loosen DM rules to work around a broken client.
 
 ## DM write migration progress
 - Frontend DM send action now calls authenticated `POST /v1/forum/dms`; direct Firestore DM write was removed from that action.
-- The endpoint currently fails closed with HTTP 503 until server-side moderation is implemented. This is intentional: DO NOT deploy this frontend to production expecting DM sends to work.
+- The endpoint now calls a trusted external moderation service. Until MODERATION_URL and MODERATION_API_KEY are configured on the VPS, DM sends fail closed with HTTP 503.
 - API writes remain disabled by default via `ENABLE_WRITES=false`. Do not enable writes until server moderation, security rules, and integration tests are complete.
+
+## Moderation gateway
+- `MODERATION_URL` must be an HTTPS endpoint accepting `POST` JSON `{text, category}` with `Authorization: Bearer <MODERATION_API_KEY>` and responding with JSON `{approved: true|false}`. Categories: `post`, `reply`, `dm`.
+- No moderation provider is configured or deployed yet. API writes remain disabled. A real moderation service must be implemented, authenticated, tested for false positives/negatives and outages, and configured before enabling writes.
+- The API rejects writes when moderation is missing, fails, times out, returns invalid JSON, or rejects the content. The endpoint URL and key are server-side secrets only.
