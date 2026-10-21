@@ -83,6 +83,23 @@ app.get("/v1/forum/dms", requireUser, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+
+app.post("/v1/forum/dms", writingEnabled, requireUser, async (req, res, next) => {
+  try {
+    const { recipientUid, text } = req.body || {};
+    if (typeof recipientUid !== "string" || !/^[a-zA-Z0-9]{1,128}$/.test(recipientUid)
+        || recipientUid === req.user.uid || !validText(text))
+      return err(res, 400, "Valid recipient and message text required");
+    const [sender, recipient] = await Promise.all([
+      allowedUser(req.user.uid), allowedUser(recipientUid)
+    ]);
+    if (!sender || !recipient) return err(res, 403, "Messaging not permitted");
+    // Fail closed until a trusted server-side moderation decision is implemented.
+    // Do not store unmoderated DMs, even if the browser reports 'toxic: false'.
+    return err(res, 503, "DM sending is disabled pending server-side moderation");
+  } catch (e) { next(e); }
+});
+
 app.get("/v1/forum/health", (req, res) => res.json({ ok: true, writesEnabled: enableWrites }));
 app.get("/v1/forum/feed", async (req, res, next) => {
   try {
