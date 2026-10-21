@@ -83,3 +83,11 @@ The running Webdock API was installed from an **older branch** and does not have
 - [ ] Verify remaining unsafe HTML interpolation, legacy admin UI and account lifecycle; run Firebase emulator tests.
 - [ ] Confirm API-first frontend behavior under outage. Public feed may fall back read-only; all writes must fail closed.
 - [ ] Stage, test, configure `ADMIN_UIDS`, deploy backend and frontend in a controlled release.
+
+## Latest verified checks (static only)
+- Parsed the current `api/server.js` JavaScript with a JS syntax parser successfully (not a runtime/integration test).
+- Scanned current `index.html` for direct Firestore `addDoc`, `setDoc`, `updateDoc`, `deleteDoc` calls: none found.
+- Admin user list now uses authenticated `GET /v1/forum/admin/users`, projecting username/ban/badges and omitting email; limited to 500 users until pagination is implemented.
+- Username claims are transactional for new API writes; existing usernames are checked against legacy user documents. Legacy claim migration and simultaneous registration tests remain required.
+- Remaining public user document reads mean privacy is **not yet fixed**. Publishing candidate rules now would still expose legacy user email fields to public readers. Migrate profile reads to safe API projections and restrict client rules before production release.
+- No VPS access or Firebase emulator was used in these checks. Deployment remains blocked.
