@@ -64,3 +64,11 @@ The running Webdock API was installed from an **older branch** and does not have
 - [ ] Merge only after smoke tests and rollback plan. No production changes have been made by these GitHub commits.
 
 **Critical:** Current branch frontend is NOT safe to deploy against the old read-only API. Keep PR draft and `ENABLE_WRITES=false`.
+
+## Review findings requiring fixes before release
+- The original account creation stores `username`, `email`, `uid`, and `backupname` directly in `users`; the staged `firestore.rules.candidate` deliberately does not accept this legacy shape. Account creation/profile storage must be migrated and tested before those rules can be published.
+- The frontend's public user listing currently reads complete `users` documents; separate public profile fields from private account data before enabling stricter privacy rules.
+- `forumApiPreview=1` is read-only; the current draft frontend's write paths require a newly deployed API with `ENABLE_WRITES=true`. Do not deploy frontend independently.
+- The browser still performs some client-side moderation and username resets. Move moderation policy decisions to the API, and avoid direct client mutations of security fields.
+- New `/v1/forum/me` returns server-calculated admin permission; `ADMIN_UIDS` must be configured with trusted Firebase UIDs, never display names.
+- Model integration and endpoints have NOT been run in CI or on the VPS. Run `npm install`, `npm run check`, emulator tests and smoke tests in staging first. This document is not evidence that any test passed.
