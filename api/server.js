@@ -55,6 +55,21 @@ function validText(text) { return typeof text === "string" && text.trim().length
 function writingEnabled(req, res, next) { return enableWrites ? next() : err(res, 503, "Forum API is in read-only mode"); }
 
 app.get("/v1/forum/health", (req, res) => res.json({ ok: true, writesEnabled: enableWrites }));
+app.get("/v1/forum/feed", async (req, res, next) => {
+  try {
+    const [posts, replies] = await Promise.all([
+      db.collection("posts").orderBy("createdAt", "desc").limit(50).get(),
+      db.collection("replies").limit(500).get()
+    ]);
+    const visiblePosts = posts.docs.filter(d => d.data().moderationStatus !== "pending");
+    const ids = new Set(visiblePosts.map(d => d.id));
+    res.json({
+      posts: visiblePosts.map(d => ({ id: d.id, ...publicPost(d.data()) })),
+      replies: replies.docs.filter(d => ids.has(d.data().postId) && d.data().moderationStatus !== "pending")
+        .map(d => ({ id: d.id, ...publicReply(d.data()) }))
+    });
+  } catch (e) { next(e); }
+});
 app.get("/v1/forum/posts", async (req, res, next) => {
   try {
     const snap = await db.collection("posts").orderBy("createdAt", "desc").limit(50).get();
