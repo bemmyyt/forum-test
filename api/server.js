@@ -65,17 +65,27 @@ async function moderateText(text, category) {
   if (!url || !key) throw Object.assign(new Error("Moderation not configured"), { status: 503 });
   const parsed = new URL(url);
   if (parsed.protocol !== "https:") throw Object.assign(new Error("Moderation requires HTTPS"), { status: 503 });
-  const response = await fetch(parsed, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + key },
-    body: JSON.stringify({ text, category }),
-    signal: AbortSignal.timeout(5000)
-  });
-  if (!response.ok) throw Object.assign(new Error("Moderation unavailable"), { status: 503 });
-  const result = await response.json();
-  if (typeof result?.approved !== "boolean")
-    throw Object.assign(new Error("Invalid moderation response"), { status: 503 });
-  return result.approved;
+  try {
+    const response = await fetch(parsed, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + key },
+      body: JSON.stringify({ text, category }),
+      signal: AbortSignal.timeout(5000),
+      redirect: "error"
+    });
+    if (!response.ok) throw new Error("Moderation HTTP failure");
+    const contentType = response.headers.get("content-type") || "";
+    if (!contentType.toLowerCase().includes("application/json")) throw new Error("Moderation response is not JSON");
+    const body = await response.text();
+    if (body.length > 4096) throw new Error("Moderation response too large");
+    const result = JSON.parse(body);
+    if (typeof result?.approved !== "boolean") throw new Error("Invalid moderation response");
+    return result.approved;
+  } catch (_) {
+    // Network errors, timeouts, redirects, invalid responses and policy failures
+    // all fail closed, without leaking moderation-provider details to clients.
+    throw Object.assign(new Error("Moderation unavailable"), { status: 503 });
+  }
 }
 
 function writingEnabled(req, res, next) { return enableWrites ? next() : err(res, 503, "Forum API is in read-only mode"); }
