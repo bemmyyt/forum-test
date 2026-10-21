@@ -54,6 +54,35 @@ async function allowedUser(uid) {
 function validText(text) { return typeof text === "string" && text.trim().length >= 1 && text.trim().length <= 3000; }
 function writingEnabled(req, res, next) { return enableWrites ? next() : err(res, 503, "Forum API is in read-only mode"); }
 
+
+// DM reads are always authenticated; never return the full collection to a client.
+const dmPublic = doc => {
+  const d = doc.data();
+  return { id: doc.id, senderUid: d.senderUid, recipientUid: d.recipientUid,
+    text: typeof d.text === "string" ? d.text : "", createdAt: Number(d.createdAt) || 0,
+    toxic: d.toxic === true };
+};
+app.get("/v1/forum/dms", requireUser, async (req, res, next) => {
+  try {
+    const uid = req.user.uid;
+    const messages = db.collection("directMessages");
+    const [sent, received] = await Promise.all([
+      messages.where("senderUid", "==", uid).limit(500).get(),
+      messages.where("recipientUid", "==", uid).limit(500).get()
+    ]);
+    const merged = new Map();
+    for (const doc of [...sent.docs, ...received.docs]) merged.set(doc.id, dmPublic(doc));
+    const all = [...merged.values()].sort((a,b) => b.createdAt - a.createdAt);
+    const partner = req.query.partner;
+    if (partner !== undefined && (typeof partner !== "string" || !/^[a-zA-Z0-9]{1,128}$/.test(partner)))
+      return err(res, 400, "Invalid partner UID");
+    res.set("Cache-Control", "no-store");
+    res.json({ messages: partner ? all.filter(d =>
+      (d.senderUid === uid && d.recipientUid === partner) ||
+      (d.senderUid === partner && d.recipientUid === uid)) : all });
+  } catch (e) { next(e); }
+});
+
 app.get("/v1/forum/health", (req, res) => res.json({ ok: true, writesEnabled: enableWrites }));
 app.get("/v1/forum/feed", async (req, res, next) => {
   try {
