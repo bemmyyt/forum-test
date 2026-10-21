@@ -282,7 +282,7 @@ app.get("/v1/forum/me", requireUser, async (req, res, next) => {
     const profile = await db.collection("users").doc(req.user.uid).get();
     const data = profile.exists ? profile.data() : {};
     res.set("Cache-Control", "no-store");
-    res.json({ uid: req.user.uid, isAdmin: admins.has(req.user.uid), banned: data.banned === true });
+    res.json({ uid: req.user.uid, isAdmin: admins.has(req.user.uid), banned: data.banned === true, banReason: data.banned === true ? (typeof data.banReason === "string" ? data.banReason : "Banned by moderator") : null, username: typeof data.username === "string" ? data.username : "" });
   } catch (e) { next(e); }
 });
 app.get("/v1/forum/health", (req, res) => res.json({ ok: true, writesEnabled: enableWrites, moderationConfigured: process.env.MODERATION_PROVIDER === "local-toxic-bert" || Boolean(process.env.MODERATION_URL && process.env.MODERATION_API_KEY) }));
