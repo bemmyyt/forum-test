@@ -328,6 +328,18 @@ function requireAdmin(req, res, next) {
   if (!admins.has(req.user.uid)) return err(res, 403, "Admin permission required");
   return next();
 }
+app.get("/v1/forum/admin/users", requireUser, requireAdmin, async (req, res, next) => {
+  try {
+    const snap = await db.collection("users").limit(500).get();
+    res.set("Cache-Control", "no-store");
+    res.json({ users: snap.docs.map(doc => {
+      const d = doc.data();
+      return { id: doc.id, username: typeof d.username === "string" ? d.username : "",
+        banned: d.banned === true, banReason: typeof d.banReason === "string" ? d.banReason : "",
+        badges: Array.isArray(d.badges) ? d.badges.filter(x => typeof x === "string").slice(0, 20) : [] };
+    }) });
+  } catch (e) { next(e); }
+});
 app.post("/v1/forum/admin/users/:uid/ban", writingEnabled, requireUser, requireAdmin, async (req, res, next) => {
   try {
     const uid = req.params.uid;
