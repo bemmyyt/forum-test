@@ -47,7 +47,7 @@ async function requireUser(req, res, next) {
 async function allowedUser(uid) {
   const snap = await db.collection("users").doc(uid).get();
   const data = snap.exists ? snap.data() : {};
-  if (data.banned === true || !data.username || String(data.username).toLowerCase().includes("ban"))
+  if (data.banned === true || typeof data.username !== "string" || !data.username.trim())
     return null;
   return data;
 }
