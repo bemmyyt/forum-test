@@ -169,6 +169,60 @@ app.post("/v1/forum/dms", writingEnabled, requireUser, async (req, res, next) =>
   } catch (e) { next(e); }
 });
 
+// Profile writes are owned by the API; clients cannot set ban/admin fields.
+app.post("/v1/forum/me/profile", writingEnabled, requireUser, async (req, res, next) => {
+  try {
+    const body = req.body || {};
+    if (!body || typeof body !== "object" || Array.isArray(body) ||
+        Object.keys(body).some(k => !["username", "bio", "avatar", "resetUsername"].includes(k)))
+      return err(res, 400, "Unsupported profile fields");
+    const ref = db.collection("users").doc(req.user.uid);
+    const current = await ref.get();
+    const existing = current.exists ? current.data() : {};
+    if (existing.banned === true) return err(res, 403, "Profile changes not permitted");
+    const update = {};
+    if (body.resetUsername === true) {
+      if (body.username !== undefined) return err(res, 400, "Conflicting username fields");
+      update.username = "";
+    }
+    if (body.username !== undefined) {
+      if (typeof body.username !== "string" || !/^[a-zA-Z0-9_]{1,20}$/.test(body.username))
+        return err(res, 400, "Invalid username");
+      const same = typeof existing.username === "string" &&
+        existing.username.toLowerCase() === body.username.toLowerCase();
+      if (!same) {
+        const existingNames = await db.collection("users").get();
+        if (existingNames.docs.some(d => d.id !== req.user.uid &&
+            typeof d.data().username === "string" &&
+            d.data().username.toLowerCase() === body.username.toLowerCase()))
+          return err(res, 409, "Username already taken");
+      }
+      update.username = body.username;
+      if (!existing.backupname) update.backupname = body.username;
+    }
+    if (body.bio !== undefined) {
+      if (typeof body.bio !== "string" || body.bio.length > 1000) return err(res, 400, "Invalid bio");
+      update.bio = body.bio;
+    }
+    if (body.avatar !== undefined) {
+      if (typeof body.avatar !== "string" || body.avatar.length > 12000 ||
+          !(body.avatar.startsWith("data:image/png;base64,") ||
+            body.avatar.startsWith("data:image/jpeg;base64,") ||
+            /^https:\/\//.test(body.avatar)))
+        return err(res, 400, "Invalid avatar");
+      update.avatar = body.avatar;
+    }
+    if (!Object.keys(update).length) return err(res, 400, "No profile changes");
+    if (!current.exists) {
+      update.createdAt = Date.now();
+      update.uid = req.user.uid;
+      update.email = req.user.email || null;
+    }
+    await ref.set(update, { merge: true });
+    res.set("Cache-Control", "no-store");
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});
 app.get("/v1/forum/me", requireUser, async (req, res, next) => {
   try {
     const profile = await db.collection("users").doc(req.user.uid).get();
