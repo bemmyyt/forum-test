@@ -35,3 +35,8 @@ The running Webdock API was installed from an **older branch** and does not have
 - `MODERATION_URL` must be an HTTPS endpoint accepting `POST` JSON `{text, category}` with `Authorization: Bearer <MODERATION_API_KEY>` and responding with JSON `{approved: true|false}`. Categories: `post`, `reply`, `dm`.
 - No moderation provider is configured or deployed yet. API writes remain disabled. A real moderation service must be implemented, authenticated, tested for false positives/negatives and outages, and configured before enabling writes.
 - The API rejects writes when moderation is missing, fails, times out, returns invalid JSON, or rejects the content. The endpoint URL and key are server-side secrets only.
+
+## Additional backend safety fixes
+- Account eligibility now checks the actual `banned` flag rather than treating usernames containing `ban` as banned.
+- Public API reads now show approved records and legacy records without a moderation status; pending/rejected records are excluded. Firestore fallback still needs equivalent restrictions before launch.
+- No live deployment or integration tests have been performed for these commits. Keep the PR in draft and `ENABLE_WRITES=false`.
