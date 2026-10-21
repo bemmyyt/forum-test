@@ -25,3 +25,8 @@ The running Webdock API was installed from an **older branch** and does not have
 - Both queries are capped at 500 documents each; implement pagination before considering this a complete DM history solution.
 - Deploy the matching backend and frontend **together on staging**; do not merge this draft yet. Test existing conversations, sending, banned users, offline behavior, and token expiration.
 - Existing public `users` reads and admin writes still require migration; the currently published emergency Firestore rules may disable admin functionality. Never loosen DM rules to work around a broken client.
+
+## DM write migration progress
+- Frontend DM send action now calls authenticated `POST /v1/forum/dms`; direct Firestore DM write was removed from that action.
+- The endpoint currently fails closed with HTTP 503 until server-side moderation is implemented. This is intentional: DO NOT deploy this frontend to production expecting DM sends to work.
+- API writes remain disabled by default via `ENABLE_WRITES=false`. Do not enable writes until server moderation, security rules, and integration tests are complete.
