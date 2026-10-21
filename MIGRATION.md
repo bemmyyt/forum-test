@@ -18,3 +18,10 @@ After deploying the **matching backend commit** on Webdock, open `https://forum.
 
 ## VPS update (when ready for staging)
 The running Webdock API was installed from an **older branch** and does not have `/v1/forum/feed` until the backend is deployed. Do not deploy the new backend or merge the frontend without a staging test. API runs via `forum-api.service`; the existing service should remain active during review.
+
+## DM API progress (2026-10-21)
+- Added `GET /v1/forum/dms` and `GET /v1/forum/dms?partner=UID` requiring a verified Firebase ID token. Both query sender/recipient by the authenticated UID and never expose unrelated messages.
+- Frontend DM reads now call the authenticated API; unrestricted Firestore DM collection reads were removed. Direct DM **writes still use Firestore** and must be migrated before API-only rules.
+- Both queries are capped at 500 documents each; implement pagination before considering this a complete DM history solution.
+- Deploy the matching backend and frontend **together on staging**; do not merge this draft yet. Test existing conversations, sending, banned users, offline behavior, and token expiration.
+- Existing public `users` reads and admin writes still require migration; the currently published emergency Firestore rules may disable admin functionality. Never loosen DM rules to work around a broken client.
