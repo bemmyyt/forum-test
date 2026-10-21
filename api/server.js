@@ -239,6 +239,45 @@ app.delete("/v1/forum/posts/:id", writingEnabled, requireUser, async (req, res, 
     res.status(204).end();
   } catch (e) { next(e); }
 });
+// Admin privileges are granted only by server-controlled Firebase UIDs.
+function requireAdmin(req, res, next) {
+  if (!admins.has(req.user.uid)) return err(res, 403, "Admin permission required");
+  return next();
+}
+app.post("/v1/forum/admin/users/:uid/ban", writingEnabled, requireUser, requireAdmin, async (req, res, next) => {
+  try {
+    const uid = req.params.uid;
+    if (!/^[a-zA-Z0-9]{1,128}$/.test(uid) || uid === req.user.uid || admins.has(uid))
+      return err(res, 400, "Invalid ban target");
+    const reason = req.body?.reason;
+    if (typeof reason !== "string" || !reason.trim() || reason.trim().length > 300)
+      return err(res, 400, "Ban reason must be 1–300 characters");
+    const ref = db.collection("users").doc(uid);
+    if (!(await ref.get()).exists) return err(res, 404, "User not found");
+    await ref.update({ banned: true, banCode: "manual", banReason: reason.trim() });
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});
+app.post("/v1/forum/admin/users/:uid/unban", writingEnabled, requireUser, requireAdmin, async (req, res, next) => {
+  try {
+    const uid = req.params.uid;
+    if (!/^[a-zA-Z0-9]{1,128}$/.test(uid)) return err(res, 400, "Invalid user UID");
+    const ref = db.collection("users").doc(uid);
+    if (!(await ref.get()).exists) return err(res, 404, "User not found");
+    await ref.update({ banned: false, banCode: null, banReason: null });
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});
+app.delete("/v1/forum/admin/replies/:id", writingEnabled, requireUser, requireAdmin, async (req, res, next) => {
+  try {
+    const id = req.params.id;
+    if (!/^[a-zA-Z0-9]{1,100}$/.test(id)) return err(res, 400, "Invalid reply ID");
+    const ref = db.collection("replies").doc(id);
+    if (!(await ref.get()).exists) return err(res, 404, "Reply not found");
+    await ref.delete();
+    res.status(204).end();
+  } catch (e) { next(e); }
+});
 app.use((error, req, res, next) => {
   console.error("Forum API error:", error);
   if (error?.status === 503) return err(res, 503, "Moderation service unavailable");
