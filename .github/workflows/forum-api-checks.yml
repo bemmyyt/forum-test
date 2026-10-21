@@ -18,6 +18,8 @@ jobs:
           node-version: '22'
       - name: Check API JavaScript syntax
         run: node --check api/server.js
+      - name: Run security contract tests
+        run: node --test api/test/*.test.js
       - name: Validate package metadata
         run: node -e "JSON.parse(require('fs').readFileSync('api/package.json','utf8'))"
       - name: Check inline module JavaScript syntax
