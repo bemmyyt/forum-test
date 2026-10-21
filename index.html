@@ -478,6 +478,21 @@ async function usernameTaken(username){
  return taken;
 }
 
+async function updateForumProfile(changes){
+  if(!auth.currentUser) throw new Error("Sign in required");
+  const token = await auth.currentUser.getIdToken();
+  const response = await fetch("https://api.adamisbored.xyz/v1/forum/me/profile",{
+    method:"POST",
+    headers:{"Authorization":"Bearer "+token,"Content-Type":"application/json"},
+    body:JSON.stringify(changes)
+  });
+  if(!response.ok){
+    const detail = await response.json().catch(()=>({}));
+    throw new Error(detail.error || "Profile update failed ("+response.status+")");
+  }
+  return response.json();
+}
+
 async function ensureUsername(user){
  if(!user) return null; // must be logged in
 
@@ -486,9 +501,7 @@ async function ensureUsername(user){
  if(existingDoc.exists()){
    const data = existingDoc.data();
    if(data.username){
-     if(!data.createdAt){
-       await setDoc(userRef, { createdAt: serverTimestamp() }, { merge: true });
-     }
+     // Legacy createdAt is optional; API initializes it for new profiles.
      return data.username;
    }
  }
@@ -509,18 +522,7 @@ async function ensureUsername(user){
    return ensureUsername(user);
  }
 
- const update = {
-   username,
-   email:user.email,
-   uid:user.uid,
-   backupname:username
- };
-
- if(!existingDoc.exists() || !existingDoc.data().createdAt){
-   update.createdAt = serverTimestamp();
- }
-
- await setDoc(userRef, update, { merge: true });
+ await updateForumProfile({username});
  return username;
 }
 
@@ -736,13 +738,7 @@ resetNameButton.onclick = async () => {
 			return;
 			}
   
-  await setDoc(
-    doc(db, "users", user.uid),
-    {
-      username: ""
-    },
-    { merge: true }
-  );
+  await updateForumProfile({resetUsername:true});
   console.log("username reset.")
     document.getElementById("posts").innerHTML = `
         <div class="post" style="animation-delay:0s;">
@@ -1253,13 +1249,7 @@ console.log("wsg adam as login text for meeeee")
 const user = auth.currentUser;
 
 if (text.includes("adamisgay")) {
-  await setDoc(
-    doc(db, "users", user.uid),
-    {
-      username: "postban"
-    },
-    { merge: true }
-  );
+  // Legacy username mutation removed; server owns profile changes.
 
   return;
 }
@@ -1272,13 +1262,7 @@ if (text.includes("should i touch grass adam")) {
 }
 
 if (text.trim().toLowerCase() === "i want to reset my username") {
-  await setDoc(
-    doc(db, "users", user.uid),
-    {
-      username: ""
-    },
-    { merge: true }
-  );
+  await updateForumProfile({resetUsername:true});
   console.log("username reset.")
     document.getElementById("posts").innerHTML = `
         <div class="post" style="animation-delay:0s;">
@@ -1314,13 +1298,7 @@ const bannedUsernames = [
 ];
 
 if (bannedUsernames.some(word => username.toLowerCase().includes(word))) {
-  await setDoc(
-    doc(db, "users", user.uid),
-    {
-      username: ""
-    },
-    { merge: true }
-  );
+  await updateForumProfile({resetUsername:true});
 
   console.log("username reset due to banned username");
   document.getElementById("posts").innerHTML = `
@@ -1922,7 +1900,7 @@ document.getElementById('saveProfileBtn').onclick = async function(){
   }
   const update = { bio };
   if(avatarData) update.avatar = avatarData;
-  await setDoc(doc(db,'users',uid), update, { merge: true});
+  await updateForumProfile(update);
   document.getElementById('profileBio').textContent = bio || 'No bio';
   if(avatarData) document.getElementById('profileAvatar').src = avatarData;
   document.getElementById('editProfileForm').style.display='none';
